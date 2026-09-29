@@ -19,11 +19,14 @@ Cible touchée : 100 points (150 au centre), combo jusqu'à ×4 (+1 toutes les 5
 - **Échauffement libre** : les cibles de la Grille sans chrono ni score, pour régler sensibilité et viseur (rien n'est enregistré).
 - **Défi du jour** : mode et difficulté tirés de la date (même choix pour tous, sans serveur), avec une série de jours consécutifs.
 - **Fin de partie** : note, progression vers la note suivante, graphique, **carte des tirs** (où tombent tes tirs autour de la cible, biais moyen en texte) et **image du score** à télécharger (générée localement).
-- **Réglages** : sensibilité, champ de vision, axe vertical inversé, viseur, couleur des cibles, décor (Néon / Épuré), qualité graphique (Auto adapte la résolution si l'appareil est lent), volume, effets réduits.
+- **Réglages** : sensibilité, champ de vision, axe vertical inversé, viseur, couleur des cibles, décor (Néon / Épuré), qualité graphique (Auto adapte la résolution si l'appareil est lent), volume, effets réduits, visée au gyroscope (mobile, expérimental).
 - **Retours** : tic-tac sur les 3 dernières secondes, carillon quand le combo monte, ★ sur les tirs au centre.
 
 ## Contrôles
 - **Souris** : pointer-lock (style FPS), clic gauche pour tirer (maintenu en mode Suivi). `Échap`/`P` pause, `R` recommencer, `M` son.
+- **Précision à taille réglable** : cibles Larges (×0,8), Standard (×1), Fines (×1,3) ou Minuscules (×1,7). Le multiplicateur s'applique au score et chaque taille a son propre record (le défi du jour reste en Standard).
+- **Évolution des scores** : page Statistiques, courbe des 30 dernières parties par mode (ramenées à la difficulté Normal), moyenne glissante et tendance.
+- **Gyroscope (mobile)** : option dans les réglages ; la vue suit le téléphone, un toucher tire au centre. Repli automatique sur le tactile si aucun capteur ne répond. Non testé sur matériel réel.
 - **Tactile / curseur libre** : toucher une cible pour tirer, glisser pour tourner la vue (mode Éclair 360°).
 - Si le verrouillage de la souris est refusé, le jeu bascule seul en curseur libre.
 
@@ -31,7 +34,7 @@ Cible touchée : 100 points (150 au centre), combo jusqu'à ×4 (+1 toutes les 5
 - `progression` : réglages, records, stats et historique dans `localStorage` (clé `etat`, quelques Ko).
 - `identite` : le pseudo est affiché sur l'accueil.
 - `classement` (`desc`, points) : score envoyé en fin de partie ; bouton « Classement » seulement si accordé.
-- `succes` : 20 succès (3 secrets) débloqués dans `jeu.js` ; bouton « Succès » seulement si accordé.
+- `succes` : 21 succès (3 secrets) débloqués dans `jeu.js` ; bouton « Succès » seulement si accordé.
 
 Sans SDK, tout le jeu reste jouable ; seuls le classement et les succès disparaissent.
 

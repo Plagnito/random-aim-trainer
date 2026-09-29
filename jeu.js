@@ -58,6 +58,13 @@
     { id: 'cible', nom: 'Cercle et point' },
     { id: 't', nom: 'Croix en T' },
   ];
+  const PSIZES = [
+    { id: 'large', nom: 'Larges', k: 1.4, mult: 0.8 },
+    { id: 'standard', nom: 'Standard', k: 1, mult: 1 },
+    { id: 'fine', nom: 'Fines', k: 0.7, mult: 1.3 },
+    { id: 'minuscule', nom: 'Minuscules', k: 0.5, mult: 1.7 },
+  ];
+  const recKey = (id, diff, psIdx) => id + ':' + diff + (id === 'precision' && psIdx !== 1 ? ':' + PSIZES[psIdx].id : '');
   const BULL = 0.35; // rayon relatif du centre de la cible
 
   const ACH = [
@@ -76,6 +83,7 @@
     ['habitue', 'Habitué du dojo', 'Jouer 10 parties.'],
     ['defi-du-jour', 'Défi relevé', 'Terminer le défi du jour.'],
     ['serie-3-jours', 'Trois jours de suite', 'Relever le défi du jour trois jours de suite.'],
+    ['microscope', 'Microscope', 'Marquer 3 000 points en Précision avec des cibles minuscules.'],
     ['note-s', 'Note S', "Obtenir la note S dans n'importe quel mode."],
     ['record-battu', 'Toujours plus haut', "Battre l'un de tes propres records."],
     ['millier', 'Millier', 'Toucher 1 000 cibles au total.', true],
@@ -90,13 +98,14 @@
   function defaults() {
     return {
       v: 1,
-      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true, inv: false, deco: 'neon', qual: 'auto' },
+      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true, inv: false, deco: 'neon', qual: 'auto', gyro: false, psz: 1 },
       rec: {},
       tot: { parties: 0, tirs: 0, touches: 0, sec: 0, serie: 0 },
       hist: [],
       succ: [],
       modes: [],
       jour: { d: '', s: 0, serie: 0 },
+      ev: {},
     };
   }
   function normalize(raw) {
@@ -113,6 +122,7 @@
     if (!/^#[0-9a-f]{6}$/i.test(d.opt.xc)) d.opt.xc = '#2de2e6';
     if (!TCOLORS.some((x) => x.id === d.opt.tc)) d.opt.tc = 'rose';
     if (d.opt.ctl !== 'verrou' && d.opt.ctl !== 'curseur') d.opt.ctl = 'verrou';
+    d.opt.psz = clamp(Math.round(d.opt.psz), 0, 3);
     if (d.opt.deco !== 'neon' && d.opt.deco !== 'epure') d.opt.deco = 'neon';
     if (['auto', 'eco', 'haute'].indexOf(d.opt.qual) < 0) d.opt.qual = 'auto';
     if (raw.rec && typeof raw.rec === 'object') Object.keys(raw.rec).forEach((k) => { if (Number.isFinite(raw.rec[k])) d.rec[k] = raw.rec[k]; });
@@ -120,6 +130,11 @@
     if (Array.isArray(raw.hist)) d.hist = raw.hist.filter((h) => Array.isArray(h) && h.length >= 5).slice(0, 20);
     if (Array.isArray(raw.succ)) d.succ = raw.succ.filter((s) => typeof s === 'string').slice(0, 80);
     if (Array.isArray(raw.modes)) d.modes = raw.modes.filter((s) => typeof s === 'string').slice(0, 10);
+    if (raw.ev && typeof raw.ev === 'object') {
+      Object.keys(raw.ev).slice(0, 10).forEach((k) => {
+        if (Array.isArray(raw.ev[k])) d.ev[k] = raw.ev[k].filter((v) => Number.isFinite(v)).slice(-30);
+      });
+    }
     if (raw.jour && typeof raw.jour === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(raw.jour.d || '')) {
       d.jour = { d: raw.jour.d, s: Number.isFinite(raw.jour.s) ? raw.jour.s : 0, serie: Number.isFinite(raw.jour.serie) ? clamp(Math.round(raw.jour.serie), 0, 9999) : 0 };
     }
@@ -633,13 +648,48 @@
   const input = { type: COARSE ? 'touch' : 'mouse', mouseX: 0, mouseY: 0, drag: null, ptrSet: false };
   const effCursor = () => S.opt.ctl === 'curseur' || sessionCursor || COARSE && input.type === 'touch';
   const cursorMode = () => document.pointerLockElement !== canvas;
+  // Visée au gyroscope (mobile) : la vue suit le téléphone, un toucher tire au centre
+  const gyro = { seen: false, fail: false, last: 0, timer: 0 };
+  const gyroActive = () => !!S.opt.gyro && COARSE && !gyro.fail && effCursor();
+  function gyroEvent(e) {
+    if ((state !== 'play' && state !== 'countdown') || !gyroActive()) { gyro.last = 0; return; }
+    const rr = e.rotationRate;
+    if (!rr) return;
+    gyro.seen = true;
+    const now = performance.now(), dt = gyro.last ? Math.min(0.1, (now - gyro.last) / 1000) : 0;
+    gyro.last = now;
+    if (!dt) return;
+    const b = (rr.beta || 0) * DEG, g = (rr.gamma || 0) * DEG;
+    const o = window.screen && window.screen.orientation;
+    const a = (((o && o.angle) || window.orientation || 0) % 360 + 360) % 360;
+    let y, p;
+    if (a === 90) { y = b; p = g; } else if (a === 180) { y = -g; p = b; } else if (a === 270) { y = -b; p = -g; } else { y = g; p = -b; }
+    view.yaw = wrapAngle(view.yaw + y * dt * S.opt.sens);
+    view.pitch += p * dt * S.opt.sens * (S.opt.inv ? -1 : 1);
+  }
+  function gyroSync() {
+    removeEventListener('devicemotion', gyroEvent);
+    if (S.opt.gyro && COARSE) addEventListener('devicemotion', gyroEvent);
+  }
+  async function setGyro(on) {
+    if (!on) { S.opt.gyro = false; gyroSync(); syncSettings(); save(); return; }
+    const DM = window.DeviceMotionEvent;
+    if (!DM) { toast("Ce navigateur n'expose pas les capteurs de mouvement.", 'info'); return; }
+    if (typeof DM.requestPermission === 'function') {
+      try {
+        if ((await DM.requestPermission()) !== 'granted') { toast('Accès aux capteurs refusé : gyroscope indisponible.', 'info'); return; }
+      } catch (e) { toast('Accès aux capteurs impossible depuis cette page.', 'info'); return; }
+    }
+    S.opt.gyro = true; gyro.fail = false; gyroSync(); syncSettings(); save();
+    toast('Gyroscope activé : lance une partie et bouge ton téléphone. Touche l\'écran pour tirer.', 'info');
+  }
 
   function newGame(mode, diff) {
     const dur = mode.duree || 0;
     return {
       mode, diff, dm: DIFFS[diff], t: 0, dur, cd: 3, score: 0, shots: 0, hits: 0, miss: 0, expired: 0, streak: 0, best: 0, mult: 1, bulls: 0,
       ms: { round: 0, phase: 'wait', times: [], pts: [], falseStarts: 0, longest: 0 }, started: false, daily: false, shotLog: [], lastTick: 0, kill: [], slices: new Array(Math.max(1, Math.ceil((dur || 50) / 5))).fill(0), lastHit: 0, missRun: 0, firing: false, onTime: 0, targets: pool, over: false,
-      hudCache: {}, prevRecord: S.rec[mode.id + ':' + diff] || 0, sliceOn: [],
+      hudCache: {}, prevRecord: 0, ps: null, psIdx: 1, k: 1, sliceOn: [],
     };
   }
   function clearTargets() { pool.forEach((t) => { t.alive = false; t.deco = false; t.mesh.visible = false; }); }
@@ -701,7 +751,7 @@
     const prev = G.mult;
     G.mult = Math.min(4, 1 + Math.floor(G.streak / 5));
     const base = bull ? (m.bullPts || 150) : 100;
-    const pts = Math.round(base * G.mult * G.dm.mult);
+    const pts = Math.round(base * G.mult * G.dm.mult * (G.ps ? G.ps.mult : 1));
     G.score += pts;
     if (bull) G.bulls++;
     G.kill.push(G.t - tg.ready);
@@ -793,7 +843,7 @@
       dirFrom(rnd(-22, 22) * DEG, rnd(-10, 14) * DEG, p).multiplyScalar(14);
       ok = pool.every((t) => !t.alive || t.pos.distanceTo(p) > 2);
     }
-    spawn(p, 0.27 * G.dm.taille, { life: 3.4 / G.dm.vit });
+    spawn(p, 0.27 * G.dm.taille * (G.ps ? G.ps.k : 1), { life: 3.4 / G.dm.vit });
   }
   // --- Mode 5 : Volantes ---
   const FLY = { x: 10, y0: -3.5, y1: 6, z0: -16.5, z1: -10 };
@@ -880,9 +930,9 @@
       },
     },
     {
-      id: 'precision', nom: 'Précision', ic: '🔬', court: 'Micro-cibles qui disparaissent. Les ratés coûtent des points.', duree: 45, bullPts: 200, penalty: 40,
+      id: 'precision', nom: 'Précision', ic: '🔬', court: 'Micro-cibles qui disparaissent. Les ratés coûtent des points.', duree: 45, bullPts: 200, penalty: 40, tailleReglable: true,
       desc: 'Deux toutes petites cibles, qui ne restent pas longtemps. Vise le centre clair pour un gros bonus, mais chaque tir dans le vide te coûte des points.',
-      regles: ['Dure 45 secondes.', 'Le centre clair vaut 200 points (100 sur le reste de la cible).', 'Un raté retire 40 points (× la difficulté) et casse ton combo.'],
+      regles: ['Dure 45 secondes.', 'Le centre clair vaut 200 points (100 sur le reste de la cible).', 'Un raté retire 40 points (× la difficulté) et casse ton combo.', 'Tu choisis la taille des cibles avant de démarrer : plus elles sont petites, plus elles rapportent.'],
       astuce: 'Respire : mieux vaut tirer juste que tirer vite.', grades: [3000, 6500, 11000, 16000],
       start() { precSpawn(); precSpawn(); },
       onHit() { precSpawn(); },
@@ -1022,6 +1072,9 @@
    * 9. Flux de partie
    * ===================================================================== */
   function controlsHTML() {
+    if (gyroActive()) {
+      return '<b>Contrôles :</b> incline et tourne ton téléphone pour viser : la vue suit tes mouvements. Touche l\'écran pour tirer au centre' + (selMode && selMode.hold ? ' (garde le doigt appuyé)' : '') + '.';
+    }
     if (effCursor()) {
       return '<b>Contrôles :</b> touche ou clique directement sur les cibles pour tirer. ' + (selMode && selMode.wide ? 'Glisse pour tourner la vue. ' : '') +
         (selMode && selMode.hold ? 'Garde le doigt (ou le clic) appuyé sur la sphère.' : '') + ' <span class="kbd">P</span> pause.';
@@ -1039,6 +1092,10 @@
     clearTargets();
     G = newGame(mode, opts.diff != null ? opts.diff : S.opt.diff);
     G.daily = !!opts.daily && !mode.libre;
+    G.psIdx = mode.tailleReglable ? (G.daily ? 1 : opts.psz != null ? opts.psz : S.opt.psz) : 1;
+    G.ps = mode.tailleReglable ? PSIZES[G.psIdx] : null;
+    G.k = G.dm.mult * (G.ps ? G.ps.mult : 1);
+    G.prevRecord = S.rec[recKey(mode.id, G.diff, G.psIdx)] || 0;
     sessionCursor = false;
     view.yaw = 0; view.pitch = 0; applyView();
     state = 'countdown'; G.cd = 3;
@@ -1050,6 +1107,16 @@
     hud.count.hidden = false; hud.count.textContent = '3'; tickCount();
     updateCursorVisual();
     if (!effCursor()) requestLock('start');
+    gyro.fail = false; gyro.last = 0; clearTimeout(gyro.timer);
+    if (gyroActive()) {
+      gyro.seen = false;
+      gyro.timer = setTimeout(() => {
+        if (!gyro.seen && gyroActive() && (state === 'countdown' || state === 'play')) {
+          gyro.fail = true; updateCursorVisual();
+          toast('Aucun capteur de mouvement détecté : retour aux commandes tactiles.', 'info');
+        }
+      }, 2600);
+    }
     Snd.beep(440);
     kick();
   }
@@ -1091,7 +1158,7 @@
     if (!G.mode || (state !== 'play' && state !== 'countdown' && state !== 'pause')) return;
     startGame(G.mode.id, replayOpts());
   }
-  const replayOpts = () => ({ diff: G.diff, daily: G.daily });
+  const replayOpts = () => ({ diff: G.diff, daily: G.daily, psz: G.psIdx });
   function quitToMenu() {
     Snd.humStop();
     releaseLock();
@@ -1103,7 +1170,7 @@
   }
 
   function gradeOf(mode, score) {
-    const raw = score / G.dm.mult, g = mode.grades;
+    const raw = score / G.k, g = mode.grades;
     return raw >= g[3] ? 'S' : raw >= g[2] ? 'A' : raw >= g[1] ? 'B' : raw >= g[0] ? 'C' : 'D';
   }
   function finish() {
@@ -1119,7 +1186,7 @@
     const hitMode = m.id !== 'suivi' && m.id !== 'reflexes';
     const acc = G.shots ? G.hits / G.shots : 0;
     const grade = gradeOf(m, score);
-    const key = m.id + ':' + G.diff;
+    const key = recKey(m.id, G.diff, G.psIdx);
     const prev = G.prevRecord;
     const isRecord = score > 0 && score > prev;
     if (isRecord) S.rec[key] = score;
@@ -1131,6 +1198,7 @@
     tot.serie = Math.max(tot.serie, G.best);
     S.hist.unshift([m.id, G.diff, score, Math.round(acc * 100), Math.floor(Date.now() / 1000)]);
     S.hist = S.hist.slice(0, 20);
+    S.ev[m.id] = (S.ev[m.id] || []).concat([Math.round(score / G.k * 1.5)]).slice(-30);
     if (S.modes.indexOf(m.id) < 0) S.modes.push(m.id);
     G.dailyOk = G.daily && score > 0;
     if (G.dailyOk) {
@@ -1180,6 +1248,7 @@
     if (tot.parties >= 10) unlock('habitue');
     if (grade === 'S') unlock('note-s');
     if (isRecord && prev > 0) unlock('record-battu');
+    if (m.id === 'precision' && G.ps && G.ps.id === 'minuscule' && score >= 3000) unlock('microscope');
     if (G.dailyOk) { unlock('defi-du-jour'); if (S.jour.serie >= 3) unlock('serie-3-jours'); }
 
     // Classement (seulement si accordé par la coquille)
@@ -1268,7 +1337,7 @@
     document.body.classList.toggle('jeu-curseur-cache', inG);
     document.body.classList.toggle('verrou', inG && !effCursor());
     const touch = input.type === 'touch';
-    crossIn.style.visibility = touch ? 'hidden' : 'visible';
+    crossIn.style.visibility = touch && !gyroActive() ? 'hidden' : 'visible';
     positionCross();
   }
   function requestLock(ctxName) {
@@ -1326,20 +1395,21 @@
   const toNdc = (x, y) => ({ x: (x / innerWidth) * 2 - 1, y: -((y / innerHeight) * 2 - 1) });
   // Point visé : centre de l'écran (souris verrouillée) ou position du pointeur
   function aimPoint() {
-    if (document.pointerLockElement === canvas || !input.ptrSet) return { x: 0, y: 0 };
+    if (gyroActive() || document.pointerLockElement === canvas || !input.ptrSet) return { x: 0, y: 0 };
     return toNdc(input.mouseX, input.mouseY);
   }
   function setPtr(e) {
     input.type = e.pointerType === 'mouse' ? 'mouse' : 'touch';
     input.mouseX = e.clientX; input.mouseY = e.clientY; input.ptrSet = true;
     if (input.type === 'mouse' && cursorMode()) moveCross(e.clientX, e.clientY);
-    crossIn.style.visibility = input.type === 'touch' ? 'hidden' : 'visible';
+    crossIn.style.visibility = input.type === 'touch' && !gyroActive() ? 'hidden' : 'visible';
   }
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     Snd.unlock();
     if (state !== 'play') return;
     e.preventDefault();
+    if (gyroActive()) { if (G.mode.hold) G.firing = true; else shoot(0, 0, e.timeStamp); return; }
     const locked = document.pointerLockElement === canvas;
     if (locked && e.pointerType === 'mouse') {
       if (e.button !== 0) return;
@@ -1372,6 +1442,7 @@
   });
   function endPointer(e) {
     const d = input.drag;
+    if (gyroActive()) { G.firing = false; return; }
     if (document.pointerLockElement === canvas && e.pointerType === 'mouse') { G.firing = false; return; }
     if (!d || d.id !== e.pointerId) return;
     input.drag = null;
@@ -1474,6 +1545,15 @@
     $('#dy-info').textContent = (done ? '✓ Relevé aujourd\'hui, meilleur : ' + fmt(j.s) + ' pts' : 'Pas encore relevé aujourd\'hui') + ' · Série : ' + serie + ' jour' + (serie > 1 ? 's' : '');
     $('#dy-go').textContent = done ? 'Rejouer le défi' : 'Relever le défi';
   }
+  function briefBest() {
+    const m = selMode, diff = briefDaily ? dailyPlan().diff : S.opt.diff, idx = m.tailleReglable && !briefDaily ? S.opt.psz : 1;
+    const b = S.rec[recKey(m.id, diff, idx)] || 0;
+    $('#br-best').textContent = m.libre ? 'Échauffement libre : aucun score enregistré.' : b ? 'Ton record : ' + fmt(b) + ' points' : 'Aucun record pour le moment : à toi de jouer !';
+  }
+  function syncBriefSize() {
+    $$('#br-size [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.v === S.opt.psz)));
+    $('#psz-info').textContent = '— points ×' + String(PSIZES[S.opt.psz].mult).replace('.', ',');
+  }
   function openBrief(m, daily) {
     selMode = m;
     briefDaily = !!daily && !m.libre;
@@ -1483,8 +1563,8 @@
     $('#br-desc').textContent = m.desc;
     $('#br-rules').innerHTML = m.regles.map((r) => '<li>' + escHtml(r) + '</li>').join('');
     $('#br-ctrl').innerHTML = controlsHTML();
-    const b = bestOf(m.id, diff);
-    $('#br-best').textContent = m.libre ? 'Échauffement libre : aucun score enregistré.' : b ? 'Ton record : ' + fmt(b) + ' points' : 'Aucun record pour le moment : à toi de jouer !';
+    $('#br-size-box').hidden = !(m.tailleReglable && !briefDaily);
+    syncBriefSize(); briefBest();
     open('brief', 'menu');
     setTimeout(() => $('#br-go').focus({ preventScroll: true }), 30);
   }
@@ -1506,12 +1586,12 @@
     const dy = $('#e-daily'); dy.hidden = !G.dailyOk;
     if (G.dailyOk) dy.textContent = '🗓️ Défi du jour relevé ! Série : ' + S.jour.serie + ' jour' + (S.jour.serie > 1 ? 's' : '') + '.';
     // Progression vers la note suivante
-    const th = m.grades, L = ['C', 'B', 'A', 'S'], raw = score / G.dm.mult;
+    const th = m.grades, L = ['C', 'B', 'A', 'S'], raw = score / G.k;
     const k = th.findIndex((t) => raw < t);
     const nx = $('#e-next');
     if (k < 0) { nx.textContent = 'Note maximale atteinte : bravo, c\'est un S !'; $('#e-nextbar').style.transform = 'scaleX(1)'; }
     else {
-      const need = Math.ceil(th[k] * G.dm.mult - score), prevT = k ? th[k - 1] : 0;
+      const need = Math.ceil(th[k] * G.k - score), prevT = k ? th[k - 1] : 0;
       nx.textContent = 'Prochaine note, ' + L[k] + ' : encore ' + fmt(need) + ' points.';
       $('#e-nextbar').style.transform = 'scaleX(' + clamp((raw - prevT) / (th[k] - prevT), 0.02, 1) + ')';
     }
@@ -1593,6 +1673,34 @@
   }
 
   // --- Statistiques ---
+  let evMode = 'grille';
+  function drawEv() {
+    const svg = $('#sx-ev'), vals = S.ev[evMode] || [], cap = $('#sx-evcap'), n = vals.length;
+    $$('#sx-evm [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === evMode)));
+    const W = Math.max(220, svg.clientWidth || 300), H = 120;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.removeAttribute('preserveAspectRatio');
+    if (n < 2) {
+      svg.innerHTML = '';
+      cap.textContent = n ? 'Une seule partie dans ce mode : joues-en une autre pour voir apparaître ta courbe.' : 'Aucune partie dans ce mode pour le moment.';
+      return;
+    }
+    const max = Math.max.apply(null, vals.concat([1])), padL = 8, padR = 8, padT = 16, padB = 10;
+    const X = (i) => padL + (i / (n - 1)) * (W - padL - padR), Y = (v) => H - padB - (v / max) * (H - padT - padB);
+    const ma = vals.map((_, i) => { const a = vals.slice(Math.max(0, i - 2), i + 1); return a.reduce((x, y) => x + y, 0) / a.length; });
+    let h = '<line x1="0" y1="' + (H - padB) + '" x2="' + W + '" y2="' + (H - padB) + '" stroke="#3a4bd0" stroke-width="1"/>' +
+      '<polyline fill="none" stroke="#ff3d7f" stroke-width="2.5" stroke-linejoin="round" points="' + ma.map((v, i) => X(i).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ') + '"/>';
+    vals.forEach((v, i) => { h += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3.2" fill="#2de2e6"/>'; });
+    const bi = vals.indexOf(max);
+    h += '<text x="' + clamp(X(bi), 26, W - 26).toFixed(1) + '" y="' + (Y(max) - 6).toFixed(1) + '" fill="#ffd166" font-size="11" font-weight="700" text-anchor="middle">' + fmt(max) + '</text>';
+    svg.innerHTML = h;
+    let trend = '';
+    if (n >= 6) {
+      const k = Math.min(5, Math.floor(n / 2)), avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+      const pct = Math.round(((avg(vals.slice(-k)) - avg(vals.slice(-2 * k, -k))) / Math.max(1, avg(vals.slice(-2 * k, -k)))) * 100);
+      trend = pct >= 3 ? ' Tendance : +' + pct + ' % sur tes ' + k + ' dernières parties.' : pct <= -3 ? ' Tendance : ' + pct + ' % sur tes ' + k + ' dernières parties.' : ' Tendance : stable.';
+    }
+    cap.textContent = 'Tes ' + n + ' dernières parties, ramenées à la difficulté Normal. Points cyan : chaque partie ; courbe rose : moyenne glissante sur 3 parties.' + trend;
+  }
   function buildStats() {
     const t = S.tot;
     const pct = t.tirs ? Math.round((t.touches / t.tirs) * 100) + ' %' : '—';
@@ -1601,7 +1709,12 @@
     const cells = [['Parties jouées', fmt(t.parties)], ['Cibles touchées', fmt(t.touches)], ['Précision globale', pct], ['Temps de jeu', time], ['Meilleure série', fmt(t.serie)], ['Défi du jour : série', dailySerie() + ' j']];
     $('#sx-tot').innerHTML = cells.map((r) => '<div class="stat"><div class="k">' + r[0] + '</div><div class="v">' + r[1] + '</div></div>').join('');
     $('#sx-rec').innerHTML = '<tr><th>Mode</th>' + DIFFS.map((d) => '<th class="r">' + d.nom + '</th>').join('') + '</tr>' +
-      SCORED.map((m) => '<tr><td>' + m.ic + ' ' + escHtml(m.nom) + '</td>' + DIFFS.map((d) => '<td class="r">' + (bestOf(m.id, d.id) ? fmt(bestOf(m.id, d.id)) : '—') + '</td>').join('') + '</tr>').join('');
+      SCORED.map((m) => '<tr><td>' + m.ic + ' ' + escHtml(m.nom) + '</td>' + DIFFS.map((d) => '<td class="r">' + (bestOf(m.id, d.id) ? fmt(bestOf(m.id, d.id)) : '—') + '</td>').join('') + '</tr>').join('') +
+      PSIZES.filter((z) => z.id !== 'standard').map((z) => {
+        const v = DIFFS.map((d) => S.rec['precision:' + d.id + ':' + z.id] || 0);
+        return v.some(Boolean) ? '<tr><td>🔬 Précision · ' + z.nom.toLowerCase() + '</td>' + v.map((x) => '<td class="r">' + (x ? fmt(x) : '—') + '</td>').join('') + '</tr>' : '';
+      }).join('');
+    $('#sx-evm').innerHTML = SCORED.map((m) => '<button type="button" role="radio" data-v="' + m.id + '">' + m.ic + ' ' + escHtml(m.nom) + '</button>').join('');
     const hist = S.hist.slice(0, 10);
     $('#sx-hist').innerHTML = hist.length
       ? '<tr><th>Mode</th><th>Difficulté</th><th class="r">Score</th><th class="r">Préc.</th><th class="r">Date</th></tr>' + hist.map((r) => {
@@ -1624,6 +1737,8 @@
     const radio = (sel, v) => $$(sel + ' [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === String(v))));
     radio('#g-ctl', o.ctl); radio('#g-deco', o.deco); radio('#g-qual', o.qual); radio('#g-xs', o.xs); radio('#g-xc', o.xc); radio('#g-tc', o.tc);
     const fx = $('#t-fx'); fx.textContent = o.fx ? '✨ Effets : activés' : '✨ Effets : réduits'; fx.setAttribute('aria-pressed', String(o.fx));
+    $('#f-gyro').hidden = !COARSE;
+    const gy = $('#t-gyro'); gy.textContent = o.gyro ? '📱 Visée au gyroscope : activée' : '📱 Visée au gyroscope : désactivée'; gy.setAttribute('aria-pressed', String(o.gyro));
     const iv = $('#t-inv'); iv.textContent = o.inv ? '↕️ Axe vertical : inversé' : '↕️ Axe vertical : normal'; iv.setAttribute('aria-pressed', String(o.inv));
     syncSoundButtons();
     drawCross();
@@ -1642,6 +1757,7 @@
     grp('#g-ctl', 'ctl', () => { sessionCursor = false; updateCursorVisual(); });
     grp('#g-deco', 'deco', () => { applyTheme(); renderOnce(); });
     grp('#g-qual', 'qual', () => { autoScale = 1; qAcc = 0; qN = 0; resize(); });
+    $('#t-gyro').addEventListener('click', () => setGyro(!S.opt.gyro));
     $('#t-inv').addEventListener('click', () => { S.opt.inv = !S.opt.inv; syncSettings(); save(); });
     grp('#g-xs', 'xs'); grp('#g-xc', 'xc');
     grp('#g-tc', 'tc', () => { pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } }); renderOnce(); });
@@ -1655,10 +1771,16 @@
   function bindUi() {
     $('#br-go').addEventListener('click', () => startGame(selMode.id, briefDaily ? { diff: dailyPlan().diff, daily: true } : {}));
     $('#dy-go').addEventListener('click', () => openBrief(dailyPlan().mode, true));
+    $('#br-size').innerHTML = PSIZES.map((z, i) => '<button type="button" role="radio" data-v="' + i + '">' + z.nom + '<small>×' + String(z.mult).replace('.', ',') + ' points</small></button>').join('');
+    $('#br-size').addEventListener('click', (e) => {
+      const b = e.target.closest('[role=radio]'); if (!b) return;
+      S.opt.psz = +b.dataset.v; save(); syncBriefSize(); briefBest();
+    });
     $('#e-card').addEventListener('click', downloadCard);
     $('#br-back').addEventListener('click', () => showScreen('menu'));
     $('#m-settings').addEventListener('click', () => { syncSettings(); open('settings', 'menu'); });
-    $('#m-stats').addEventListener('click', () => { buildStats(); open('stats', 'menu'); });
+    $('#m-stats').addEventListener('click', () => { buildStats(); open('stats', 'menu'); requestAnimationFrame(drawEv); });
+    $('#sx-evm').addEventListener('click', (e) => { const b = e.target.closest('[role=radio]'); if (b) { evMode = b.dataset.v; drawEv(); } });
     $('#m-help').addEventListener('click', () => open('help', 'menu'));
     $('#m-board').addEventListener('click', () => openBoard('menu'));
     $('#m-ach').addEventListener('click', () => openAch('menu'));
@@ -1669,8 +1791,8 @@
     $('#sx-clear').addEventListener('click', (e) => {
       const b = e.currentTarget;
       if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Confirmer : tout effacer ?'; return; }
-      S.rec = {}; S.tot = defaults().tot; S.hist = []; S.modes = [];
-      save(true); buildStats(); toast('Statistiques effacées (réglages et succès conservés).', 'info');
+      S.rec = {}; S.tot = defaults().tot; S.hist = []; S.modes = []; S.ev = {};
+      save(true); buildStats(); drawEv(); toast('Statistiques effacées (réglages et succès conservés).', 'info');
     });
     $('#p-resume').addEventListener('click', resume);
     $('#p-restart').addEventListener('click', restart);
@@ -1724,7 +1846,11 @@
     const st = $('#e-status');
     if (!caps().classement || !SDK.soumettreScore || score <= 0) return;
     st.className = 'status'; st.textContent = 'Envoi du score au classement…';
-    const detail = ((G.daily ? 'Défi · ' : '') + m.nom + ' · ' + DIFFS[G.diff].nom + (m.id === 'suivi' ? '' : m.id === 'reflexes' ? '' : ' · ' + Math.round(acc * 100) + ' %')).slice(0, 40);
+    const parts = [(G.daily ? 'Défi · ' : '') + m.nom + (G.ps && G.ps.id !== 'standard' ? ' ' + G.ps.nom.toLowerCase() : ''), DIFFS[G.diff].nom];
+    if (m.id !== 'suivi' && m.id !== 'reflexes') parts.push(Math.round(acc * 100) + ' %');
+    let detail = parts.join(' · ');
+    if (detail.length > 40) detail = parts.slice(0, 2).join(' · ');
+    detail = detail.slice(0, 40);
     try {
       const r = await SDK.soumettreScore(score, detail);
       const rang = r && (r.rang || r.rank);
@@ -1775,13 +1901,14 @@
    * 14. Démarrage
    * ===================================================================== */
   function applyAllSettings() {
-    applyTheme(); applyFov(); syncSettings(); Snd.refresh(); refreshMenu();
+    gyroSync(); applyTheme(); applyFov(); syncSettings(); Snd.refresh(); refreshMenu();
     pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } });
     renderOnce();
   }
   buildMenu();
   bindSettings();
   bindUi();
+  gyroSync();
   drawCross();
   syncSettings();
   refreshMenu();

@@ -1,6 +1,6 @@
 {
   "titre": "Aim Trainer 3D",
-  "description": "Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, records et statistiques.",
+  "description": "Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques.",
   "emoji": "🎯",
   "couleur": "#101437",
   "tags": [
@@ -92,6 +92,11 @@
         "id": "serie-3-jours",
         "titre": "Trois jours de suite",
         "texte": "Relever le défi du jour trois jours de suite."
+      },
+      {
+        "id": "microscope",
+        "titre": "Microscope",
+        "texte": "Marquer 3 000 points en Précision avec des cibles minuscules."
       },
       {
         "id": "note-s",

@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Aim Trainer 3D</title>
-  <meta name="description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, records et statistiques." />
+  <meta name="description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques." />
   <meta name="robots" content="noindex" />
   <meta name="theme-color" content="#101437" />
   <link rel="canonical" href="https://random.plagnito.com/a/aim-trainer/" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Aim Trainer 3D" />
-  <meta property="og:description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, records et statistiques." />
+  <meta property="og:description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques." />
   <meta property="og:url" content="https://random.plagnito.com/a/aim-trainer/" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎯%3C/text%3E%3C/svg%3E" />
   <style>
@@ -292,6 +292,10 @@
       </div>
       <p class="lead" id="br-desc"></p>
       <ul class="rules" id="br-rules"></ul>
+      <div class="field" id="br-size-box" hidden>
+        <div class="lbl" id="l-psz">Taille des cibles <small class="dim" id="psz-info"></small></div>
+        <div class="seg" id="br-size" role="radiogroup" aria-labelledby="l-psz"></div>
+      </div>
       <div class="ctrl-box" id="br-ctrl"></div>
       <p class="card bs" style="min-height:0;border:0;padding:0;background:none" id="br-best"></p>
       <div class="row">
@@ -400,6 +404,11 @@
           <button class="btn" type="button" id="t-inv" aria-pressed="false">↕️ Axe vertical : normal</button>
           <span class="hint">Inverse le haut et le bas (style simulateur de vol).</span>
         </div>
+        <div class="field" id="f-gyro" hidden>
+          <div class="lbl">Téléphone</div>
+          <button class="btn" type="button" id="t-gyro" aria-pressed="false">📱 Visée au gyroscope : désactivée</button>
+          <span class="hint">Expérimental : la vue suit les mouvements du téléphone et un toucher tire au centre. Si le haut et le bas te semblent inversés, utilise « Axe vertical ».</span>
+        </div>
       </div>
       <div class="two">
         <div class="field">
@@ -428,6 +437,12 @@
     <section class="screen" id="s-stats" tabindex="-1" aria-labelledby="t-stats" hidden>
       <h2 id="t-stats">Statistiques</h2>
       <div class="stats-grid" id="sx-tot"></div>
+      <div>
+        <h3>Évolution de tes scores</h3>
+        <div class="seg" id="sx-evm" role="radiogroup" aria-label="Mode affiché"></div>
+        <svg class="chart" id="sx-ev" style="height:120px;margin-top:8px" role="img" aria-label="Courbe d'évolution de tes scores"></svg>
+        <div class="chart-cap" id="sx-evcap"></div>
+      </div>
       <div>
         <h3>Records</h3>
         <div class="scroll"><table id="sx-rec"></table></div>
@@ -470,6 +485,7 @@
             <li><b>Tactile / curseur libre</b> : touche une cible pour tirer, glisse le doigt pour tourner la vue.</li>
             <li><span class="kbd">Échap</span> ou <span class="kbd">P</span> : pause. <span class="kbd">R</span> : recommencer. <span class="kbd">M</span> : couper le son.</li>
             <li>Une flèche dorée t'indique où est la cible quand elle est hors de l'écran.</li>
+            <li><b>Sur téléphone</b>, tu peux activer la visée au gyroscope dans les réglages (expérimental).</li>
           </ul>
         </div>
         <div>
