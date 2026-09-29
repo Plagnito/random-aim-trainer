@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Aim Trainer 3D</title>
+  <meta name="description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, trois difficultés, records et statistiques." />
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#101437" />
+  <link rel="canonical" href="https://random.plagnito.com/a/aim-trainer/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Aim Trainer 3D" />
+  <meta property="og:description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, trois difficultés, records et statistiques." />
+  <meta property="og:url" content="https://random.plagnito.com/a/aim-trainer/" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎯%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #101437;
+      --bg2: #0a0d26;
+      --panel: rgba(12, 16, 46, .86);
+      --line: rgba(45, 226, 230, .28);
+      --txt: #eef1ff;
+      --dim: #aeb6e8;
+      --pink: #ff3d7f;
+      --cyan: #2de2e6;
+      --gold: #ffd166;
+      --green: #7dff6a;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--txt);
+      font-family: ui-rounded, "Trebuchet MS", "Segoe UI", system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { position: fixed; inset: 0; user-select: none; -webkit-user-select: none; }
+    #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+    body.jeu-curseur-cache #scene { cursor: none; }
+
+    h1, h2, h3 { margin: 0; font-style: italic; text-transform: uppercase; letter-spacing: .04em; }
+    h1 { font-size: clamp(1.9rem, 7vw, 3.2rem); line-height: 1; font-weight: 900;
+      text-shadow: 0 0 18px rgba(255, 61, 127, .75), 0 0 2px #fff; }
+    h1 span { color: var(--cyan); text-shadow: 0 0 18px rgba(45, 226, 230, .8); }
+    h2 { font-size: clamp(1.3rem, 5vw, 1.9rem); font-weight: 900; text-shadow: 0 0 14px rgba(45, 226, 230, .5); }
+    h3 { font-size: .95rem; color: var(--cyan); margin-bottom: .5rem; }
+    p { margin: 0; }
+    .dim { color: var(--dim); }
+
+    /* ---------- Écrans ---------- */
+    #ui { position: fixed; inset: 0; display: flex; overflow-y: auto; overflow-x: hidden; padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+      background: radial-gradient(ellipse at center, rgba(10, 13, 38, .35), rgba(10, 13, 38, .8)); -webkit-overflow-scrolling: touch; }
+    .screen { margin: auto; width: 100%; max-width: 880px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      padding: clamp(14px, 3.4vw, 26px); display: flex; flex-direction: column; gap: 14px;
+      box-shadow: 0 0 40px rgba(45, 226, 230, .12), inset 0 0 40px rgba(255, 61, 127, .06); backdrop-filter: blur(6px); }
+    .screen.narrow { max-width: 520px; }
+    .screen:focus { outline: none; }
+    .brand { display: flex; flex-direction: column; gap: 6px; }
+    .tag { color: var(--dim); font-size: 1rem; }
+    .pseudo { color: var(--gold); font-weight: 700; }
+    .lead { line-height: 1.5; font-size: .98rem; color: #dfe4ff; }
+    .lead b { color: var(--cyan); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .row.center { justify-content: center; }
+    .grow { flex: 1 1 140px; }
+
+    .btn { font: inherit; font-weight: 800; letter-spacing: .03em; color: var(--txt); background: rgba(255, 255, 255, .06);
+      border: 1.5px solid var(--line); border-radius: 12px; min-height: 46px; min-width: 46px; padding: 10px 16px; cursor: pointer;
+      transition: transform .08s, background .15s, border-color .15s, box-shadow .15s; }
+    .btn:hover { background: rgba(45, 226, 230, .14); border-color: var(--cyan); }
+    .btn:active { transform: scale(.97); }
+    .btn.primary { background: linear-gradient(135deg, var(--pink), #ff7a45); border-color: transparent; color: #fff;
+      box-shadow: 0 0 22px rgba(255, 61, 127, .45); text-transform: uppercase; }
+    .btn.primary:hover { box-shadow: 0 0 30px rgba(255, 61, 127, .75); }
+    .btn.danger { border-color: rgba(255, 90, 90, .6); }
+    .btn.danger.armed { background: #c62839; border-color: #ff8a95; }
+    :is(button, input, [tabindex]):focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .screen:focus-visible, #scene:focus-visible { outline: none; }
+
+    /* Difficulté + segments */
+    .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+    .seg button { font: inherit; font-weight: 700; color: var(--txt); background: rgba(255, 255, 255, .05); border: 1.5px solid var(--line);
+      border-radius: 10px; min-height: 44px; padding: 8px 14px; cursor: pointer; flex: 1 1 auto; }
+    .seg button[aria-checked="true"] { background: var(--cyan); color: #06123a; border-color: var(--cyan); }
+    .seg small { display: block; font-weight: 500; font-size: .72rem; opacity: .85; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field > label, .field > .lbl { font-weight: 700; font-size: .95rem; display: flex; justify-content: space-between; gap: 8px; }
+    .field output { color: var(--gold); font-variant-numeric: tabular-nums; }
+    .field .hint { font-size: .8rem; color: var(--dim); }
+    input[type=range] { width: 100%; height: 44px; accent-color: var(--pink); background: transparent; }
+
+    /* Cartes de modes */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; }
+    .card { font: inherit; text-align: left; color: var(--txt); cursor: pointer; background: linear-gradient(160deg, rgba(45, 226, 230, .1), rgba(255, 61, 127, .08));
+      border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; min-height: 120px;
+      transition: transform .1s, border-color .15s, box-shadow .15s; }
+    .card:hover { transform: translateY(-2px); border-color: var(--pink); box-shadow: 0 6px 22px rgba(255, 61, 127, .25); }
+    .card .ic { font-size: 1.8rem; line-height: 1; }
+    .card .nm { font-weight: 900; text-transform: uppercase; font-style: italic; letter-spacing: .03em; }
+    .card .ct { font-size: .82rem; color: var(--dim); line-height: 1.3; flex: 1; }
+    .card .bs { font-size: .78rem; color: var(--gold); font-variant-numeric: tabular-nums; }
+
+    ul.rules { margin: 0; padding-left: 1.2rem; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
+    .ctrl-box { border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px; font-size: .92rem; line-height: 1.45; background: rgba(45, 226, 230, .05); }
+    .ctrl-box b { color: var(--cyan); }
+    .kbd { display: inline-block; min-width: 1.6em; text-align: center; padding: 0 .4em; border: 1px solid var(--dim); border-bottom-width: 2px; border-radius: 6px; font-size: .85em; }
+
+    /* Fin de partie */
+    .score-big { font-size: clamp(3rem, 14vw, 5.5rem); font-weight: 900; font-style: italic; line-height: 1; color: #fff;
+      text-shadow: 0 0 24px rgba(255, 61, 127, .8); font-variant-numeric: tabular-nums; }
+    .end-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .grade { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 2.8rem; font-weight: 900; font-style: italic;
+      border: 4px solid var(--gold); color: var(--gold); text-shadow: 0 0 14px currentColor; flex: none; }
+    .grade[data-g="S"] { border-color: var(--pink); color: var(--pink); box-shadow: 0 0 26px rgba(255, 61, 127, .6); }
+    .grade[data-g="A"] { border-color: var(--green); color: var(--green); }
+    .grade[data-g="B"] { border-color: var(--cyan); color: var(--cyan); }
+    .grade[data-g="C"], .grade[data-g="D"] { border-color: var(--dim); color: var(--dim); }
+    .badge { display: inline-block; background: var(--gold); color: #2a1d00; font-weight: 900; border-radius: 999px; padding: 4px 12px; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+    .stat { background: rgba(255, 255, 255, .05); border-radius: 10px; padding: 8px 10px; }
+    .stat .k { font-size: .75rem; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+    .stat .v { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .chart { width: 100%; height: 90px; display: block; }
+    .chart-cap { font-size: .78rem; color: var(--dim); }
+    .status { font-size: .88rem; min-height: 1.3em; color: var(--dim); }
+    .status.ok { color: var(--green); }
+    .status.ko { color: #ff9aa8; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+    th { color: var(--cyan); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+    td.r, th.r { text-align: right; }
+    tr.me td { color: var(--gold); font-weight: 800; }
+    .scroll { overflow-x: auto; }
+    .ach { display: flex; gap: 10px; align-items: flex-start; padding: 8px 4px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+    .ach .em { font-size: 1.5rem; flex: none; width: 2rem; text-align: center; }
+    .ach.off { opacity: .55; }
+    .ach b { display: block; }
+    .ach span { font-size: .85rem; color: var(--dim); }
+
+    /* Réglages : viseur */
+    .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+    .swatch { width: 44px; height: 44px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; }
+    .swatch[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 2px var(--bg), 0 0 14px currentColor; }
+    .xh-prev { width: 100%; height: 90px; border-radius: 12px; display: grid; place-items: center;
+      background: repeating-linear-gradient(45deg, #1b2260 0 14px, #141a4d 14px 28px); border: 1px solid var(--line); }
+    .xh-styles button { padding: 4px; min-width: 52px; flex: 0 0 auto; }
+    .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; padding: max(10px, env(safe-area-inset-top)) 10px 10px; display: grid;
+      grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px; text-shadow: 0 2px 6px rgba(0, 0, 0, .7); }
+    .hud-l { display: flex; flex-direction: column; gap: 2px; }
+    .hud-c { text-align: center; min-width: 110px; }
+    .hud-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .lbl { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+    #h-score { font-size: clamp(1.6rem, 6vw, 2.6rem); font-weight: 900; font-style: italic; line-height: 1; font-variant-numeric: tabular-nums; }
+    #h-mult { font-weight: 900; color: var(--gold); font-size: clamp(.9rem, 3vw, 1.15rem); font-variant-numeric: tabular-nums; }
+    #h-mult.up { animation: mpop .35s ease-out; }
+    @keyframes mpop { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+    #h-time { font-size: clamp(1.8rem, 7vw, 3rem); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    #h-time.low { color: var(--pink); }
+    .bar { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, .15); overflow: hidden; margin-top: 4px; }
+    .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--pink)); transform-origin: left; }
+    #h-acc { font-size: clamp(.95rem, 3.2vw, 1.2rem); font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
+    .hud-btns { display: flex; gap: 6px; pointer-events: auto; }
+    .hud-btns .btn { min-height: 44px; min-width: 44px; padding: 4px 10px; font-size: 1.1rem; background: rgba(10, 13, 38, .65); }
+    body.verrou .hud-btns { opacity: .55; }
+    #h-msg { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 560px);
+      text-align: center; font-weight: 800; font-size: clamp(1rem, 3.6vw, 1.3rem); padding: 8px 14px; border-radius: 12px;
+      background: rgba(10, 13, 38, .6); }
+    #h-msg.big { top: 38%; bottom: auto; font-size: clamp(1.4rem, 6vw, 2.4rem); background: none; text-shadow: 0 0 18px rgba(45, 226, 230, .9), 0 2px 6px #000; }
+    #count { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; font-size: clamp(6rem, 30vw, 14rem); font-weight: 900;
+      font-style: italic; color: #fff; text-shadow: 0 0 40px var(--pink), 0 0 10px var(--cyan); }
+    #count.tick { animation: ctick .9s ease-out; }
+    @keyframes ctick { 0% { transform: scale(1.7); opacity: 0; } 25% { opacity: 1; } 100% { transform: scale(.9); opacity: .7; } }
+
+    /* Viseur et effets */
+    #cross { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 5; }
+    #cross-in { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: grid; place-items: center; }
+    #hitm { position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
+    #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+    .pop { position: absolute; left: 0; top: 0; font-weight: 900; font-style: italic; font-size: 1.3rem; color: #fff; white-space: nowrap; opacity: 0;
+      text-shadow: 0 0 10px rgba(255, 61, 127, .9), 0 2px 4px #000; will-change: transform, opacity; }
+    .pop.gold { color: var(--gold); font-size: 1.6rem; }
+    .pop.bad { color: #ff7a8a; }
+    .tapr { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--cyan); opacity: 0; pointer-events: none; }
+    #arrow { position: fixed; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; font-size: 2rem; color: var(--gold);
+      pointer-events: none; text-shadow: 0 0 12px var(--pink), 0 0 3px #000; z-index: 4; }
+    #toasts { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px;
+      align-items: center; width: min(92vw, 480px); z-index: 20; pointer-events: none; }
+    .toast { background: rgba(10, 13, 38, .94); border: 1.5px solid var(--gold); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: .92rem; text-align: center;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, .5); animation: tin .25s ease-out; }
+    .toast.info { border-color: var(--cyan); }
+    @keyframes tin { from { transform: translateY(-14px); opacity: 0; } }
+    #fatal { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; background: var(--bg); z-index: 50; line-height: 1.5; }
+    #fatal > div { max-width: 480px; }
+    noscript p { position: fixed; inset: 0; background: var(--bg); padding: 30px; z-index: 60; }
+
+    @media (max-width: 420px) {
+      .hud-c { min-width: 80px; }
+      .lbl { font-size: .6rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001s !important; transition-duration: .001s !important; }
+    }
+  </style>
+</head>
+<body>
+  <noscript><p>Aim Trainer 3D a besoin de JavaScript pour fonctionner. Active-le puis recharge la page.</p></noscript>
+
+  <canvas id="scene" tabindex="-1" aria-label="Scène 3D : le dojo d'entraînement avec les cibles"></canvas>
+
+  <!-- Effets : points flottants, flèche de direction, viseur -->
+  <div id="fx" aria-hidden="true"></div>
+  <div id="arrow" hidden aria-hidden="true">➤</div>
+  <div id="cross" hidden aria-hidden="true"><div id="cross-in"></div><svg id="hitm" viewBox="-22 -22 44 44"></svg></div>
+
+  <!-- HUD en partie -->
+  <div id="hud" hidden>
+    <div class="hud-l">
+      <div class="lbl">Score</div>
+      <div id="h-score">0</div>
+      <div id="h-mult">×1</div>
+    </div>
+    <div class="hud-c">
+      <div class="lbl" id="h-tlbl">Temps</div>
+      <div id="h-time">60</div>
+      <div class="bar"><i id="h-bar"></i></div>
+    </div>
+    <div class="hud-r">
+      <div class="hud-btns">
+        <button class="btn" id="b-snd" type="button" aria-label="Couper le son" aria-pressed="false">🔊</button>
+        <button class="btn" id="b-pause" type="button" aria-label="Mettre en pause">⏸</button>
+      </div>
+      <div id="h-acc"></div>
+    </div>
+  </div>
+  <div id="h-msg" hidden role="status"></div>
+  <div id="count" hidden aria-live="assertive"></div>
+
+  <!-- Interfaces -->
+  <main id="ui">
+
+    <!-- Accueil -->
+    <section class="screen" id="s-menu" tabindex="-1" aria-labelledby="t-menu" hidden>
+      <header class="brand">
+        <h1 id="t-menu">Aim Trainer <span>3D</span></h1>
+        <p class="tag">Le dojo néon pour muscler ta visée.</p>
+        <p class="pseudo" id="pseudo" hidden></p>
+      </header>
+      <p class="lead">
+        <b>Le but :</b> toucher un maximum de cibles avant la fin du temps. Plus tu enchaînes sans rater, plus le multiplicateur grimpe.
+        <b>Ordinateur :</b> la souris est verrouillée, bouge-la pour viser et clique pour tirer.
+        <b>Tactile :</b> touche les cibles et glisse le doigt pour tourner la vue.
+        Choisis un mode pour commencer.
+      </p>
+      <div class="field">
+        <div class="lbl" id="l-diff">Difficulté <small class="dim" id="diff-info"></small></div>
+        <div class="seg" id="diff" role="radiogroup" aria-labelledby="l-diff"></div>
+      </div>
+      <div class="cards" id="modes"></div>
+      <nav class="row" aria-label="Menu secondaire">
+        <button class="btn grow" type="button" id="m-settings">⚙️ Réglages</button>
+        <button class="btn grow" type="button" id="m-stats">📊 Statistiques</button>
+        <button class="btn grow" type="button" id="m-board" hidden>🏅 Classement</button>
+        <button class="btn grow" type="button" id="m-ach" hidden>🏆 Succès</button>
+        <button class="btn grow" type="button" id="m-help">❓ Comment jouer</button>
+      </nav>
+    </section>
+
+    <!-- Consignes d'un mode -->
+    <section class="screen narrow" id="s-brief" tabindex="-1" aria-labelledby="t-brief" hidden>
+      <div>
+        <div class="lbl" id="br-diff"></div>
+        <h2 id="t-brief">Mode</h2>
+      </div>
+      <p class="lead" id="br-desc"></p>
+      <ul class="rules" id="br-rules"></ul>
+      <div class="ctrl-box" id="br-ctrl"></div>
+      <p class="card bs" style="min-height:0;border:0;padding:0;background:none" id="br-best"></p>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="br-go">Démarrer</button>
+        <button class="btn grow" type="button" id="br-back">Retour</button>
+      </div>
+    </section>
+
+    <!-- Pause -->
+    <section class="screen narrow" id="s-pause" tabindex="-1" aria-labelledby="t-pause" hidden>
+      <h2 id="t-pause">Pause</h2>
+      <p class="dim" id="pause-info"></p>
+      <div class="row" style="flex-direction:column">
+        <button class="btn primary" type="button" id="p-resume">Reprendre</button>
+        <button class="btn" type="button" id="p-restart">Recommencer la partie</button>
+        <button class="btn" type="button" id="p-settings">⚙️ Réglages</button>
+        <button class="btn danger" type="button" id="p-quit">Quitter vers le menu</button>
+      </div>
+    </section>
+
+    <!-- Fin de partie -->
+    <section class="screen" id="s-end" tabindex="-1" aria-labelledby="t-end" hidden>
+      <div class="lbl" id="e-mode"></div>
+      <div class="end-top">
+        <div>
+          <h2 id="t-end">Partie terminée</h2>
+          <div class="score-big" id="e-score">0</div>
+          <div class="row" style="margin-top:6px;align-items:center">
+            <span class="badge" id="e-record" hidden>Nouveau record !</span>
+            <span class="dim" id="e-best"></span>
+          </div>
+        </div>
+        <div class="grade" id="e-grade" data-g="C" aria-label="Note"></div>
+      </div>
+      <div class="stats-grid" id="e-stats"></div>
+      <div>
+        <svg class="chart" id="e-chart" role="img" aria-label="Graphique de la partie"></svg>
+        <div class="chart-cap" id="e-chartcap"></div>
+      </div>
+      <div class="status" id="e-status" role="status"></div>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="e-again">Rejouer</button>
+        <button class="btn grow" type="button" id="e-menu">Autre mode</button>
+        <button class="btn grow" type="button" id="e-board" hidden>🏅 Classement</button>
+      </div>
+    </section>
+
+    <!-- Réglages -->
+    <section class="screen" id="s-settings" tabindex="-1" aria-labelledby="t-settings" hidden>
+      <h2 id="t-settings">Réglages</h2>
+      <div class="two">
+        <div class="field">
+          <label for="r-sens">Sensibilité de la souris <output id="o-sens"></output></label>
+          <input type="range" id="r-sens" min="0.2" max="3" step="0.05" />
+          <span class="hint">Plus c'est haut, plus la vue tourne vite. Vaut aussi pour le glissé du doigt.</span>
+        </div>
+        <div class="field">
+          <label for="r-fov">Champ de vision <output id="o-fov"></output></label>
+          <input type="range" id="r-fov" min="60" max="110" step="1" />
+          <span class="hint">Angle horizontal. 90° est un bon départ.</span>
+        </div>
+        <div class="field">
+          <div class="lbl" id="l-ctl">Contrôle</div>
+          <div class="seg" id="g-ctl" role="radiogroup" aria-labelledby="l-ctl">
+            <button type="button" role="radio" data-v="verrou">🖱️ Souris verrouillée<small>style FPS</small></button>
+            <button type="button" role="radio" data-v="curseur">👆 Curseur / tactile<small>clic ou toucher</small></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="r-vol">Volume <output id="o-vol"></output></label>
+          <input type="range" id="r-vol" min="0" max="100" step="1" />
+          <button class="btn" type="button" id="t-mute" aria-pressed="false">🔊 Son activé</button>
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <div class="lbl" id="l-xs">Forme du viseur</div>
+          <div class="seg xh-styles" id="g-xs" role="radiogroup" aria-labelledby="l-xs"></div>
+          <div class="lbl" id="l-xc" style="margin-top:6px">Couleur du viseur</div>
+          <div class="swatches" id="g-xc" role="radiogroup" aria-labelledby="l-xc"></div>
+          <label for="r-xz" style="margin-top:6px;font-weight:700;display:flex;justify-content:space-between">Taille du viseur <output id="o-xz"></output></label>
+          <input type="range" id="r-xz" min="0.6" max="2.2" step="0.1" />
+        </div>
+        <div class="field">
+          <div class="lbl">Aperçu</div>
+          <div class="xh-prev" id="xh-prev" aria-hidden="true"></div>
+          <div class="lbl" id="l-tc" style="margin-top:6px">Couleur des cibles</div>
+          <div class="swatches" id="g-tc" role="radiogroup" aria-labelledby="l-tc"></div>
+          <span class="hint">Les cibles se lisent aussi à leurs anneaux : le centre est toujours clair.</span>
+          <button class="btn" type="button" id="t-fx" aria-pressed="true" style="margin-top:6px">✨ Effets : activés</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="st-back">Retour</button>
+      </div>
+    </section>
+
+    <!-- Statistiques -->
+    <section class="screen" id="s-stats" tabindex="-1" aria-labelledby="t-stats" hidden>
+      <h2 id="t-stats">Statistiques</h2>
+      <div class="stats-grid" id="sx-tot"></div>
+      <div>
+        <h3>Records</h3>
+        <div class="scroll"><table id="sx-rec"></table></div>
+      </div>
+      <div>
+        <h3>Dernières parties</h3>
+        <div class="scroll"><table id="sx-hist"></table></div>
+      </div>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="sx-back">Retour</button>
+        <button class="btn danger grow" type="button" id="sx-clear">Effacer mes stats</button>
+      </div>
+    </section>
+
+    <!-- Classement -->
+    <section class="screen" id="s-board" tabindex="-1" aria-labelledby="t-board" hidden>
+      <h2 id="t-board">Classement</h2>
+      <p class="dim">Tous modes confondus : le mode et la difficulté sont indiqués en détail. Ce classement est amical, les scores viennent du navigateur des joueurs.</p>
+      <div class="status" id="bd-status" role="status"></div>
+      <div class="scroll"><table id="bd-tab"></table></div>
+      <div class="row"><button class="btn primary grow" type="button" id="bd-back">Retour</button></div>
+    </section>
+
+    <!-- Succès -->
+    <section class="screen" id="s-ach" tabindex="-1" aria-labelledby="t-ach" hidden>
+      <h2 id="t-ach">Succès</h2>
+      <div class="status" id="ac-status" role="status"></div>
+      <div id="ac-list"></div>
+      <div class="row"><button class="btn primary grow" type="button" id="ac-back">Retour</button></div>
+    </section>
+
+    <!-- Aide -->
+    <section class="screen" id="s-help" tabindex="-1" aria-labelledby="t-help" hidden>
+      <h2 id="t-help">Comment jouer</h2>
+      <div class="two">
+        <div>
+          <h3>Commandes</h3>
+          <ul class="rules">
+            <li><b>Souris</b> : bouge pour viser, clic gauche pour tirer (maintiens-le en mode Suivi).</li>
+            <li><b>Tactile / curseur libre</b> : touche une cible pour tirer, glisse le doigt pour tourner la vue.</li>
+            <li><span class="kbd">Échap</span> ou <span class="kbd">P</span> : pause. <span class="kbd">R</span> : recommencer. <span class="kbd">M</span> : couper le son.</li>
+            <li>Une flèche dorée t'indique où est la cible quand elle est hors de l'écran.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Points</h3>
+          <ul class="rules">
+            <li>Cible touchée : <b>100</b> points, <b>150</b> si tu touches le centre clair.</li>
+            <li>Combo : +1 de multiplicateur toutes les 5 cibles d'affilée, jusqu'à <b>×4</b>. Un raté remet à ×1.</li>
+            <li>La difficulté multiplie les points : ×1, ×1,5 ou ×2.</li>
+            <li>Les notes vont de D à <b>S</b>, selon ton score dans le mode.</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h3>Les six modes</h3>
+        <ul class="rules" id="help-modes"></ul>
+      </div>
+      <div class="row"><button class="btn primary grow" type="button" id="hp-back">Retour</button></div>
+    </section>
+  </main>
+
+  <div id="toasts" aria-live="polite"></div>
+  <div id="fatal" hidden><div><h2>Oups</h2><p id="fatal-msg"></p></div></div>
+
+  <script src="./three.min.js"></script>
+  <script src="./jeu.js"></script>
+</body>
+</html>

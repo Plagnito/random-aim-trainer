@@ -1,0 +1,32 @@
+{
+  "titre": "Aim Trainer 3D",
+  "description": "Entraîne ta visée dans un dojo néon en 3D : six modes (grille, éclair, suivi, précision, volantes, réflexes), trois difficultés, records et statistiques.",
+  "emoji": "🎯",
+  "couleur": "#101437",
+  "tags": ["jeu", "3d", "visée", "arcade"],
+  "capacites": {
+    "progression": true,
+    "identite": true,
+    "classement": { "sens": "desc", "unite": "points", "titre": "Meilleurs scores" },
+    "succes": [
+      { "id": "premiere-cible", "titre": "Première cible", "texte": "Toucher une cible pour la première fois." },
+      { "id": "echauffe", "titre": "Échauffé", "texte": "Terminer ta première partie." },
+      { "id": "combo-max", "titre": "Combo au maximum", "texte": "Atteindre le multiplicateur ×4 (15 cibles touchées d'affilée)." },
+      { "id": "sans-faute", "titre": "Sans faute", "texte": "Finir une partie de Grille avec au moins 25 cibles touchées et aucun raté." },
+      { "id": "oeil-de-lynx", "titre": "Œil de lynx", "texte": "Finir une partie avec 90 % de précision ou plus (30 tirs minimum)." },
+      { "id": "cinq-mille", "titre": "Cinq mille", "texte": "Marquer 5 000 points dans une seule partie." },
+      { "id": "dix-mille", "titre": "Dix mille", "texte": "Marquer 10 000 points dans une seule partie." },
+      { "id": "doigts-eclair", "titre": "Doigts d'éclair", "texte": "Toucher la cible en moins de 200 ms en mode Réflexes." },
+      { "id": "colle-a-la-cible", "titre": "Collé à la cible", "texte": "Rester au moins 80 % du temps sur la cible en mode Suivi." },
+      { "id": "touche-a-tout", "titre": "Touche-à-tout", "texte": "Jouer une partie dans chacun des six modes." },
+      { "id": "sans-filet", "titre": "Sans filet", "texte": "Finir une partie en Difficile avec 70 % de précision ou plus (20 tirs minimum)." },
+      { "id": "centenaire", "titre": "Centenaire", "texte": "Toucher 100 cibles au total." },
+      { "id": "habitue", "titre": "Habitué du dojo", "texte": "Jouer 10 parties." },
+      { "id": "note-s", "titre": "Note S", "texte": "Obtenir la note S dans n'importe quel mode." },
+      { "id": "record-battu", "titre": "Toujours plus haut", "texte": "Battre l'un de tes propres records." },
+      { "id": "millier", "titre": "Millier", "texte": "Toucher 1 000 cibles au total.", "secret": true },
+      { "id": "trop-presse", "titre": "Trop pressé", "texte": "Faire un faux départ en mode Réflexes.", "secret": true },
+      { "id": "rafale-dans-le-vide", "titre": "Rafale dans le vide", "texte": "Rater 10 tirs d'affilée.", "secret": true }
+    ]
+  }
+}
