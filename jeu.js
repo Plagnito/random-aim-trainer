@@ -74,6 +74,8 @@
     ['sans-filet', 'Sans filet', 'Finir une partie en Difficile avec 70 % de précision ou plus (20 tirs minimum).'],
     ['centenaire', 'Centenaire', 'Toucher 100 cibles au total.'],
     ['habitue', 'Habitué du dojo', 'Jouer 10 parties.'],
+    ['defi-du-jour', 'Défi relevé', 'Terminer le défi du jour.'],
+    ['serie-3-jours', 'Trois jours de suite', 'Relever le défi du jour trois jours de suite.'],
     ['note-s', 'Note S', "Obtenir la note S dans n'importe quel mode."],
     ['record-battu', 'Toujours plus haut', "Battre l'un de tes propres records."],
     ['millier', 'Millier', 'Toucher 1 000 cibles au total.', true],
@@ -88,12 +90,13 @@
   function defaults() {
     return {
       v: 1,
-      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true },
+      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true, inv: false, deco: 'neon', qual: 'auto' },
       rec: {},
       tot: { parties: 0, tirs: 0, touches: 0, sec: 0, serie: 0 },
       hist: [],
       succ: [],
       modes: [],
+      jour: { d: '', s: 0, serie: 0 },
     };
   }
   function normalize(raw) {
@@ -110,11 +113,16 @@
     if (!/^#[0-9a-f]{6}$/i.test(d.opt.xc)) d.opt.xc = '#2de2e6';
     if (!TCOLORS.some((x) => x.id === d.opt.tc)) d.opt.tc = 'rose';
     if (d.opt.ctl !== 'verrou' && d.opt.ctl !== 'curseur') d.opt.ctl = 'verrou';
+    if (d.opt.deco !== 'neon' && d.opt.deco !== 'epure') d.opt.deco = 'neon';
+    if (['auto', 'eco', 'haute'].indexOf(d.opt.qual) < 0) d.opt.qual = 'auto';
     if (raw.rec && typeof raw.rec === 'object') Object.keys(raw.rec).forEach((k) => { if (Number.isFinite(raw.rec[k])) d.rec[k] = raw.rec[k]; });
     if (raw.tot && typeof raw.tot === 'object') Object.keys(d.tot).forEach((k) => { if (Number.isFinite(raw.tot[k])) d.tot[k] = raw.tot[k]; });
     if (Array.isArray(raw.hist)) d.hist = raw.hist.filter((h) => Array.isArray(h) && h.length >= 5).slice(0, 20);
     if (Array.isArray(raw.succ)) d.succ = raw.succ.filter((s) => typeof s === 'string').slice(0, 80);
     if (Array.isArray(raw.modes)) d.modes = raw.modes.filter((s) => typeof s === 'string').slice(0, 10);
+    if (raw.jour && typeof raw.jour === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(raw.jour.d || '')) {
+      d.jour = { d: raw.jour.d, s: Number.isFinite(raw.jour.s) ? raw.jour.s : 0, serie: Number.isFinite(raw.jour.serie) ? clamp(Math.round(raw.jour.serie), 0, 9999) : 0 };
+    }
     return d;
   }
   function loadSave() {
@@ -205,6 +213,7 @@
         if (bull) { tone(f * 2, f * 2.6, 0.16, 'triangle', 0.22, 0.03); }
       },
       miss() { tone(150, 70, 0.13, 'triangle', 0.22); },
+      combo(mult) { const f = 520 + mult * 110; tone(f, f, 0.09, 'triangle', 0.2); tone(f * 1.5, f * 1.5, 0.15, 'triangle', 0.2, 0.08); },
       expire() { tone(200, 90, 0.22, 'sawtooth', 0.1); },
       beep(f, d) { tone(f, f, d || 0.12, 'square', 0.14); },
       go() { tone(880, 880, 0.3, 'square', 0.16); },
@@ -256,21 +265,31 @@
       x.globalAlpha = 1; x.strokeStyle = line; x.lineWidth = 3; x.strokeRect(1.5, 1.5, w - 3, h - 3);
     };
   }
+  const THEMES = {
+    neon: { bg: 0x0a0d26, fog: 0.016, deco: true, side: [['#10164a', '#0b1038'], '#3a4bd0', '#2de2e6'], floor: [['#1a0f3d', '#140b33'], '#ff3d7f', '#ff3d7f'], ceil: [['#0c1035', '#0c1035'], '#3a2a8c', '#7b5cff'] },
+    epure: { bg: 0x0b0d14, fog: 0.011, deco: false, side: [['#181b28', '#11141d'], '#2c3350', '#3d4870'], floor: [['#15171f', '#101219'], '#2c3350', '#3d4870'], ceil: [['#0d0f16', '#0d0f16'], '#232940', '#2c3350'] },
+  };
+  const room = { mats: [], sets: {}, deco: [] };
   (function buildRoom() {
-    const wallT = (r) => canvasTex(128, 128, gridDraw(['#10164a', '#0b1038'], '#3a4bd0', '#2de2e6'), r);
-    const floorT = canvasTex(128, 128, gridDraw(['#1a0f3d', '#140b33'], '#ff3d7f', '#ff3d7f'), [12, 12]);
-    const ceilT = canvasTex(128, 128, gridDraw(['#0c1035', '#0c1035'], '#3a2a8c', '#7b5cff'), [12, 12]);
+    Object.keys(THEMES).forEach((k) => {
+      const t = THEMES[k];
+      room.sets[k] = {
+        side: canvasTex(128, 128, gridDraw(t.side[0], t.side[1], t.side[2]), [12, 5]),
+        floor: canvasTex(128, 128, gridDraw(t.floor[0], t.floor[1], t.floor[2]), [12, 12]),
+        ceil: canvasTex(128, 128, gridDraw(t.ceil[0], t.ceil[1], t.ceil[2]), [12, 12]),
+      };
+    });
+    const n = room.sets.neon;
     const mk = (map) => new THREE.MeshBasicMaterial({ map, side: THREE.BackSide });
-    const side = wallT([12, 5]);
-    const mats = [mk(side), mk(side), mk(ceilT), mk(floorT), mk(wallT([12, 5])), mk(wallT([12, 5]))];
-    const room = new THREE.Mesh(new THREE.BoxGeometry(RW * 2, RYMAX - RYMIN, RD * 2), mats);
-    room.position.y = (RYMAX + RYMIN) / 2;
-    scene.add(room);
+    room.mats = [mk(n.side), mk(n.side), mk(n.ceil), mk(n.floor), mk(n.side), mk(n.side)];
+    const box = new THREE.Mesh(new THREE.BoxGeometry(RW * 2, RYMAX - RYMIN, RD * 2), room.mats);
+    box.position.y = (RYMAX + RYMIN) / 2;
+    scene.add(box);
 
-    // Néons
+    // Néons (décor « Néon » uniquement)
     const neon = (c, w, h, d, x, y, z) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: c, fog: false }));
-      m.position.set(x, y, z); scene.add(m);
+      m.position.set(x, y, z); scene.add(m); room.deco.push(m);
     };
     [-9, 0, 9].forEach((x, i) => neon(i === 1 ? 0xff3d7f : 0x2de2e6, 0.22, 0.06, RD * 2 - 1, x, RYMAX - 0.04, 0));
     const by = RYMIN + 0.1;
@@ -283,7 +302,7 @@
     const sign = (w, h, draw, x, y, z, ry) => {
       const tex = canvasTex(512, Math.round(512 * h / w), draw);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-      m.position.set(x, y, z); m.rotation.y = ry; scene.add(m);
+      m.position.set(x, y, z); m.rotation.y = ry; scene.add(m); room.deco.push(m);
     };
     const textDraw = (txt, col, size) => (x, w, h) => {
       x.clearRect(0, 0, w, h);
@@ -305,6 +324,14 @@
     sign(14, 4, textDraw('DOJO', '#ff3d7f', 150), -RW + 0.05, 3, 0, Math.PI / 2);
     sign(16, 4, textDraw('VISE JUSTE', '#ffd166', 100), RW - 0.05, 3, 0, -Math.PI / 2);
   })();
+  function applyTheme() {
+    const th = THEMES[S.opt.deco] || THEMES.neon, set = room.sets[S.opt.deco] || room.sets.neon;
+    [0, 1, 4, 5].forEach((i) => { room.mats[i].map = set.side; });
+    room.mats[2].map = set.ceil; room.mats[3].map = set.floor;
+    scene.background.set(th.bg); scene.fog.color.set(th.bg); scene.fog.density = th.fog;
+    room.deco.forEach((o) => { o.visible = th.deco; });
+  }
+  applyTheme();
 
   // --- Sprites de lueur, particules ---
   const glowTex = canvasTex(64, 64, (x, w, h) => {
@@ -459,9 +486,25 @@
   for (let i = 0; i < 8; i++) pool.push(makeTarget());
   const tColor = () => (TCOLORS.find((c) => c.id === S.opt.tc) || TCOLORS[0]).hex;
 
+  let autoScale = 1, qAcc = 0, qN = 0;
+  function pixelRatio() {
+    const dpr = window.devicePixelRatio || 1, q = S.opt.qual;
+    let r = Math.min(dpr, q === 'eco' ? 1 : q === 'haute' ? 3 : COARSE ? 1.75 : 2);
+    if (q === 'auto') r *= autoScale;
+    return Math.max(0.6, r);
+  }
+  // En mode « auto » : si la partie tourne sous ~36 i/s, on baisse un peu la résolution
+  function qualityWatch(raw) {
+    if (S.opt.qual !== 'auto' || raw > 0.5) return;
+    qAcc += raw; qN++;
+    if (qN >= 90) {
+      const avg = qAcc / qN; qAcc = 0; qN = 0;
+      if (avg > 0.028 && autoScale > 0.6) { autoScale = Math.max(0.6, autoScale * 0.8); resize(); }
+    }
+  }
   function resize() {
     const w = innerWidth, h = innerHeight;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, COARSE ? 1.75 : 2));
+    renderer.setPixelRatio(pixelRatio());
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     applyFov();
@@ -595,7 +638,7 @@
     const dur = mode.duree || 0;
     return {
       mode, diff, dm: DIFFS[diff], t: 0, dur, cd: 3, score: 0, shots: 0, hits: 0, miss: 0, expired: 0, streak: 0, best: 0, mult: 1, bulls: 0,
-      ms: { round: 0, phase: 'wait', times: [], pts: [], falseStarts: 0, longest: 0 }, started: false, kill: [], slices: new Array(Math.max(1, Math.ceil((dur || 50) / 5))).fill(0), lastHit: 0, missRun: 0, firing: false, onTime: 0, targets: pool, over: false,
+      ms: { round: 0, phase: 'wait', times: [], pts: [], falseStarts: 0, longest: 0 }, started: false, daily: false, shotLog: [], lastTick: 0, kill: [], slices: new Array(Math.max(1, Math.ceil((dur || 50) / 5))).fill(0), lastHit: 0, missRun: 0, firing: false, onTime: 0, targets: pool, over: false,
       hudCache: {}, prevRecord: S.rec[mode.id + ':' + diff] || 0, sliceOn: [],
     };
   }
@@ -665,11 +708,12 @@
     G.slices[Math.min(G.slices.length - 1, Math.floor(G.t / 5))]++;
     G.lastHit = G.t;
     burst(tg.pos, tColor(), 22, 7);
-    pop('+' + fmt(pts), tg.pos, bull ? 'gold' : '');
+    pop((bull ? '★ ' : '') + '+' + fmt(pts), tg.pos, bull ? 'gold' : '');
     hitMarker(bull);
     Snd.hit(G.mult, bull);
     if (G.mult > prev) {
       const el = $('#h-mult'); el.classList.remove('up'); void el.offsetWidth; el.classList.add('up');
+      Snd.combo(G.mult);
       if (G.mult === 4) unlock('combo-max');
     }
     unlock('premiere-cible');
@@ -686,12 +730,32 @@
     }
   }
 
+  // Carte des tirs : position de chaque tir par rapport à la cible la plus proche (en rayons de cible)
+  const _q = new THREE.Quaternion(), _d = new THREE.Vector3(), _t = new THREE.Vector3();
+  function recordShot(dir, hit) {
+    if (G.shotLog.length >= 400) return;
+    let best = null, bc = -2;
+    for (const t of pool) {
+      if (!t.alive || t.deco) continue;
+      const c = dir.dot(t.pos) / t.pos.length();
+      if (c > bc) { bc = c; best = t; }
+    }
+    if (!best) return;
+    _q.copy(camera.quaternion).invert();
+    _d.copy(dir).applyQuaternion(_q); _t.copy(best.pos).applyQuaternion(_q);
+    if (_d.z >= -0.01 || _t.z >= -0.01) return;
+    const rad = best.r / _t.length();
+    const dx = (_d.x / -_d.z - _t.x / -_t.z) / rad, dy = (_d.y / -_d.z - _t.y / -_t.z) / rad;
+    if (Math.abs(dx) > 4.4 || Math.abs(dy) > 4.4) return;
+    G.shotLog.push([dx, dy, hit ? 1 : 0]);
+  }
   function shoot(nx, ny, evTime) {
     if (state !== 'play' || G.mode.hold) return;
     const dir = aimDir(nx, ny);
     G.shots++;
     Snd.shoot(); crossKick();
     const pk = pickTarget(dir);
+    recordShot(dir, !!pk);
     const now = evTime && evTime > 0 && evTime < performance.now() + 50 ? evTime : performance.now();
     if (G.mode.onShot && G.mode.onShot(pk, now, dir)) { if (!pk) addTracer(addHole(dir), '#ffffff'); else addTracer(V.a.copy(dir).multiplyScalar(pk.t), tColor()); return; }
     if (pk) {
@@ -897,6 +961,14 @@
       },
     },
   ];
+  MODES.push(Object.assign({}, MODES[0], {
+    id: 'libre', nom: 'Échauffement libre', ic: '🧘', libre: true, duree: 0,
+    court: 'Sans chrono ni score : règle ta sensibilité et ton viseur.',
+    desc: "Les trois cibles de la Grille, sans chronomètre et sans classement. Parfait pour te mettre en jambes ou tester tes réglages.",
+    regles: ["Aucune limite de temps : la partie s'arrête quand tu quittes.", "Ouvre ⏸ Pause puis Réglages pour ajuster sensibilité, champ de vision et viseur, puis reprends.", 'Rien n’est enregistré : ni record, ni statistique, ni succès de score.'],
+    astuce: 'Échauffement libre : ⏸ Pause puis Réglages pour ajuster ta sensibilité.', grades: [1, 1, 1, 1],
+  }));
+  const SCORED = MODES.filter((m) => !m.libre);
   const modeById = (id) => MODES.find((m) => m.id === id);
 
   /* =====================================================================
@@ -918,6 +990,12 @@
       setText(hud.mult, 'm', '');
       const done = G.ms.times.filter((x) => x > 0);
       setText(hud.acc, 'a', done.length ? 'Moyenne ' + Math.round(done.reduce((a, b) => a + b, 0) / done.length) + ' ms' : '');
+      return;
+    }
+    if (m.libre) {
+      hud.tlbl.textContent = 'Libre'; setText(hud.time, 't', '∞'); hud.bar.style.transform = 'scaleX(1)';
+      setText(hud.mult, 'm', '×' + G.mult + (G.streak ? ' · série ' + G.streak : ''));
+      setText(hud.acc, 'a', G.shots ? G.hits + ' ✓ · ' + Math.round((G.hits / G.shots) * 100) + ' %' : '');
       return;
     }
     hud.tlbl.textContent = 'Temps';
@@ -951,14 +1029,16 @@
     return '<b>Contrôles :</b> la souris sera verrouillée. Bouge-la pour viser, <b>clic gauche</b> pour tirer' + (selMode && selMode.hold ? ' (maintiens-le)' : '') +
       '. <span class="kbd">Échap</span> ou <span class="kbd">P</span> : pause.';
   }
-  function startGame(modeId) {
+  function startGame(modeId, opts) {
+    opts = opts || {};
     Snd.unlock();
     const mode = modeById(modeId || (selMode && selMode.id));
     if (!mode) return;
     selMode = mode;
     Snd.humStop();
     clearTargets();
-    G = newGame(mode, S.opt.diff);
+    G = newGame(mode, opts.diff != null ? opts.diff : S.opt.diff);
+    G.daily = !!opts.daily && !mode.libre;
     sessionCursor = false;
     view.yaw = 0; view.pitch = 0; applyView();
     state = 'countdown'; G.cd = 3;
@@ -1009,8 +1089,9 @@
   }
   function restart() {
     if (!G.mode || (state !== 'play' && state !== 'countdown' && state !== 'pause')) return;
-    startGame(G.mode.id);
+    startGame(G.mode.id, replayOpts());
   }
+  const replayOpts = () => ({ diff: G.diff, daily: G.daily });
   function quitToMenu() {
     Snd.humStop();
     releaseLock();
@@ -1051,6 +1132,12 @@
     S.hist.unshift([m.id, G.diff, score, Math.round(acc * 100), Math.floor(Date.now() / 1000)]);
     S.hist = S.hist.slice(0, 20);
     if (S.modes.indexOf(m.id) < 0) S.modes.push(m.id);
+    G.dailyOk = G.daily && score > 0;
+    if (G.dailyOk) {
+      const today = dayKey(), j = S.jour;
+      if (j.d === today) j.s = Math.max(j.s, score);
+      else { j.serie = j.d === yesterdayKey() ? j.serie + 1 : 1; j.d = today; j.s = score; }
+    }
 
     // Détails + graphique
     const rows = [], sr = { vals: [], cap: '', unit: '' };
@@ -1087,12 +1174,13 @@
     if (score >= 5000) unlock('cinq-mille');
     if (score >= 10000) unlock('dix-mille');
     if (m.id === 'suivi' && G.suiviPct >= 0.8) unlock('colle-a-la-cible');
-    if (MODES.every((x) => S.modes.indexOf(x.id) >= 0)) unlock('touche-a-tout');
+    if (SCORED.every((x) => S.modes.indexOf(x.id) >= 0)) unlock('touche-a-tout');
     if (tot.touches >= 100) unlock('centenaire');
     if (tot.touches >= 1000) unlock('millier');
     if (tot.parties >= 10) unlock('habitue');
     if (grade === 'S') unlock('note-s');
     if (isRecord && prev > 0) unlock('record-battu');
+    if (G.dailyOk) { unlock('defi-du-jour'); if (S.jour.serie >= 3) unlock('serie-3-jours'); }
 
     // Classement (seulement si accordé par la coquille)
     submitScore(m, score, acc);
@@ -1116,7 +1204,9 @@
     const live = state === 'play' || state === 'countdown';
     if (!live && ts - lastDraw < 33) { raf = requestAnimationFrame(loop); return; } // ambiance : 30 i/s
     lastDraw = ts;
-    const dt = Math.min(0.1, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
+    const raw = (ts - lastTs) / 1000;
+    const dt = Math.min(0.1, Math.max(0, raw)); lastTs = ts;
+    if (state === 'play') qualityWatch(raw);
     const nowS = ts / 1000;
     if (state === 'countdown') {
       const prev = Math.ceil(G.cd);
@@ -1130,7 +1220,11 @@
       if (G.hudCache.hint !== undefined && G.t > G.hudCache.hint && G.mode.id !== 'reflexes') { setMsg(''); G.hudCache.hint = undefined; }
       updateTargets(dt, nowS);
       if (G.mode.duree && G.t >= G.mode.duree) finish();
-      else if (G.mode.id !== 'suivi') { const s = Math.ceil(G.dur - G.t); if (G.mode.duree && G.hudCache.t !== String(s)) updateHud(); }
+      else if (G.mode.duree) {
+        const s = Math.ceil(G.dur - G.t);
+        if (s <= 3 && s >= 1 && G.lastTick !== s) { G.lastTick = s; Snd.beep(660, 0.07); }
+        if (G.mode.id !== 'suivi' && G.hudCache.t !== String(s)) updateHud();
+      }
     } else if (state !== 'pause') {
       ambientUpdate(dt, nowS);
     }
@@ -1224,7 +1318,7 @@
     const mx = e.movementX || 0, my = e.movementY || 0;
     if (Math.abs(mx) > 400 || Math.abs(my) > 400) return; // saut parasite à la capture
     const k = 0.0012 * S.opt.sens * (camera.fov / 75);
-    view.yaw -= mx * k; view.pitch -= my * k;
+    view.yaw -= mx * k; view.pitch -= my * k * (S.opt.inv ? -1 : 1);
     view.yaw = wrapAngle(view.yaw);
     applyView();
   });
@@ -1271,7 +1365,7 @@
       if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 9) { d.moved = true; d.lx = d.x; d.ly = d.y; }
       if (d.moved) {
         const k = radPerPx() * S.opt.sens;
-        view.yaw = wrapAngle(view.yaw + (e.clientX - d.lx) * k); view.pitch += (e.clientY - d.ly) * k;
+        view.yaw = wrapAngle(view.yaw + (e.clientX - d.lx) * k); view.pitch += (e.clientY - d.ly) * k * (S.opt.inv ? -1 : 1);
         d.lx = e.clientX; d.ly = e.clientY; applyView();
       }
     }
@@ -1326,13 +1420,29 @@
   }
   const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // --- Défi du jour : mode et difficulté tirés de la date (même choix pour tout le monde, sans serveur) ---
+  function dayKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function yesterdayKey() { const d = new Date(); d.setDate(d.getDate() - 1); return dayKey(d); }
+  function dailyPlan() {
+    let h = 2166136261;
+    const key = dayKey();
+    for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h >>>= 0;
+    return { mode: SCORED[h % SCORED.length], diff: [0, 1, 1, 2][(h >>> 8) % 4] };
+  }
+  function dailySerie() { const j = S.jour; return j.d === dayKey() || j.d === yesterdayKey() ? j.serie : 0; }
+  let briefDaily = false;
+
   // --- Menu ---
   function bestOf(modeId, diff) { return S.rec[modeId + ':' + diff] || 0; }
   function buildMenu() {
     const box = $('#modes'); box.innerHTML = '';
     MODES.forEach((m) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'card'; b.dataset.mode = m.id;
+      b.type = 'button'; b.className = 'card' + (m.libre ? ' wide' : ''); b.dataset.mode = m.id;
       b.innerHTML = '<span class="ic" aria-hidden="true">' + m.ic + '</span><span class="nm">' + escHtml(m.nom) + '</span><span class="ct">' + escHtml(m.court) +
         '</span><span class="bs"></span>';
       b.addEventListener('click', () => openBrief(m));
@@ -1357,18 +1467,24 @@
     $('#diff-info').textContent = '— ' + df.info;
     $$('#modes .card').forEach((c) => {
       const b = bestOf(c.dataset.mode, S.opt.diff);
-      $('.bs', c).textContent = b ? 'Record : ' + fmt(b) + ' pts' : 'Pas encore de record';
+      $('.bs', c).textContent = c.dataset.mode === 'libre' ? 'Sans score enregistré' : b ? 'Record : ' + fmt(b) + ' pts' : 'Pas encore de record';
     });
+    const plan = dailyPlan(), j = S.jour, done = j.d === dayKey(), serie = dailySerie();
+    $('#dy-title').textContent = plan.mode.ic + ' ' + plan.mode.nom + ' · ' + DIFFS[plan.diff].nom;
+    $('#dy-info').textContent = (done ? '✓ Relevé aujourd\'hui, meilleur : ' + fmt(j.s) + ' pts' : 'Pas encore relevé aujourd\'hui') + ' · Série : ' + serie + ' jour' + (serie > 1 ? 's' : '');
+    $('#dy-go').textContent = done ? 'Rejouer le défi' : 'Relever le défi';
   }
-  function openBrief(m) {
+  function openBrief(m, daily) {
     selMode = m;
-    $('#t-brief').textContent = m.ic + ' ' + m.nom;
-    $('#br-diff').textContent = 'Difficulté : ' + DIFFS[S.opt.diff].nom + ' (points ×' + String(DIFFS[S.opt.diff].mult).replace('.', ',') + ')';
+    briefDaily = !!daily && !m.libre;
+    const diff = briefDaily ? dailyPlan().diff : S.opt.diff;
+    $('#t-brief').textContent = (briefDaily ? '🗓️ Défi du jour · ' : '') + m.ic + ' ' + m.nom;
+    $('#br-diff').textContent = 'Difficulté : ' + DIFFS[diff].nom + ' (points ×' + String(DIFFS[diff].mult).replace('.', ',') + ')' + (briefDaily ? ' — imposée par le défi du jour' : '');
     $('#br-desc').textContent = m.desc;
     $('#br-rules').innerHTML = m.regles.map((r) => '<li>' + escHtml(r) + '</li>').join('');
     $('#br-ctrl').innerHTML = controlsHTML();
-    const b = bestOf(m.id, S.opt.diff);
-    $('#br-best').textContent = b ? 'Ton record : ' + fmt(b) + ' points' : 'Aucun record pour le moment : à toi de jouer !';
+    const b = bestOf(m.id, diff);
+    $('#br-best').textContent = m.libre ? 'Échauffement libre : aucun score enregistré.' : b ? 'Ton record : ' + fmt(b) + ' points' : 'Aucun record pour le moment : à toi de jouer !';
     open('brief', 'menu');
     setTimeout(() => $('#br-go').focus({ preventScroll: true }), 30);
   }
@@ -1385,6 +1501,81 @@
     $('#e-chartcap').textContent = sr.cap;
     const st = $('#e-status'); st.className = 'status'; st.textContent = '';
     $('#e-board').hidden = !caps().classement;
+    lastResult = { m, score, grade, isRecord, rows, diff: G.diff, daily: G.daily };
+    // Défi du jour
+    const dy = $('#e-daily'); dy.hidden = !G.dailyOk;
+    if (G.dailyOk) dy.textContent = '🗓️ Défi du jour relevé ! Série : ' + S.jour.serie + ' jour' + (S.jour.serie > 1 ? 's' : '') + '.';
+    // Progression vers la note suivante
+    const th = m.grades, L = ['C', 'B', 'A', 'S'], raw = score / G.dm.mult;
+    const k = th.findIndex((t) => raw < t);
+    const nx = $('#e-next');
+    if (k < 0) { nx.textContent = 'Note maximale atteinte : bravo, c\'est un S !'; $('#e-nextbar').style.transform = 'scaleX(1)'; }
+    else {
+      const need = Math.ceil(th[k] * G.dm.mult - score), prevT = k ? th[k - 1] : 0;
+      nx.textContent = 'Prochaine note, ' + L[k] + ' : encore ' + fmt(need) + ' points.';
+      $('#e-nextbar').style.transform = 'scaleX(' + clamp((raw - prevT) / (th[k] - prevT), 0.02, 1) + ')';
+    }
+    // Carte des tirs
+    const has = G.shotLog.length >= 3;
+    $('#e-mapbox').hidden = !has;
+    if (has) { $('#e-map').innerHTML = mapHTML(G.shotLog); $('#e-bias').textContent = biasText(G.shotLog); }
+  }
+  let lastResult = null;
+  function mapHTML(log) {
+    const c = tColor();
+    let h = '<circle r="1" fill="' + c + '" fill-opacity=".28" stroke="' + c + '" stroke-width=".05"/><circle r=".35" fill="#ffe9a6" fill-opacity=".6"/>' +
+      '<path d="M-4.4 0H4.4M0 -4.4V4.4" stroke="#fff" stroke-opacity=".12" stroke-width=".04"/>';
+    log.forEach((p) => {
+      h += p[2] ? '<circle cx="' + p[0].toFixed(2) + '" cy="' + (-p[1]).toFixed(2) + '" r=".12" fill="#2de2e6"/>'
+        : '<path d="M' + (p[0] - 0.13).toFixed(2) + ' ' + (-p[1] - 0.13).toFixed(2) + 'l.26 .26m0 -.26l-.26 .26" stroke="#ff3d7f" stroke-width=".07" stroke-linecap="round"/>';
+    });
+    const ms = log.filter((p) => !p[2]);
+    if (ms.length >= 4) {
+      const mx = ms.reduce((a, p) => a + p[0], 0) / ms.length, my = ms.reduce((a, p) => a + p[1], 0) / ms.length;
+      h += '<circle cx="' + mx.toFixed(2) + '" cy="' + (-my).toFixed(2) + '" r=".2" fill="none" stroke="#ffd166" stroke-width=".07"/>';
+    }
+    return h;
+  }
+  function biasText(log) {
+    const ms = log.filter((p) => !p[2]);
+    if (ms.length < 4) return 'Très peu de ratés : impossible de dégager une tendance, beau travail !';
+    const mx = ms.reduce((a, p) => a + p[0], 0) / ms.length, my = ms.reduce((a, p) => a + p[1], 0) / ms.length;
+    const parts = [];
+    if (Math.abs(mx) > 0.6) parts.push(mx < 0 ? 'à gauche' : 'à droite');
+    if (Math.abs(my) > 0.6) parts.push(my > 0 ? 'en haut' : 'en bas');
+    if (!parts.length) return 'Tes ratés sont bien répartis autour de la cible : pas de biais marqué.';
+    return 'Tes tirs ratés partent plutôt ' + parts.join(' et ') + ' de la cible' + (Math.hypot(mx, my) > 2 ? ' (nettement)' : '') + '. Le rond doré marque leur position moyenne.';
+  }
+  // Image du score à télécharger (génération locale, aucun envoi)
+  function downloadCard() {
+    const r = lastResult; if (!r) return;
+    const W = 1200, H = 630, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d'), F = '"Trebuchet MS", system-ui, sans-serif';
+    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#101437'); g.addColorStop(1, '#2a0f3d');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(45,226,230,.18)'; x.lineWidth = 2;
+    for (let i = 0; i <= W; i += 60) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, H); x.stroke(); }
+    for (let k = 0; k <= H; k += 60) { x.beginPath(); x.moveTo(0, k); x.lineTo(W, k); x.stroke(); }
+    x.fillStyle = '#2de2e6'; x.shadowColor = '#2de2e6'; x.shadowBlur = 18; x.font = 'italic 900 54px ' + F; x.fillText('AIM TRAINER 3D', 60, 100); x.shadowBlur = 0;
+    x.fillStyle = '#aeb6e8'; x.font = '700 34px ' + F; x.fillText((r.daily ? 'Défi du jour · ' : '') + r.m.nom + ' · ' + DIFFS[r.diff].nom, 60, 160);
+    x.fillStyle = '#fff'; x.shadowColor = '#ff3d7f'; x.shadowBlur = 40; x.font = 'italic 900 190px ' + F; x.fillText(fmt(r.score), 60, 360); x.shadowBlur = 0;
+    x.fillStyle = '#ffd166'; x.font = '700 36px ' + F; x.fillText('points' + (r.isRecord ? ' · nouveau record !' : ''), 66, 420);
+    const gc = { S: '#ff3d7f', A: '#7dff6a', B: '#2de2e6', C: '#aeb6e8', D: '#aeb6e8' }[r.grade];
+    x.beginPath(); x.arc(1010, 250, 110, 0, Math.PI * 2); x.lineWidth = 12; x.strokeStyle = gc; x.shadowColor = gc; x.shadowBlur = 24; x.stroke(); x.shadowBlur = 0;
+    x.fillStyle = gc; x.textAlign = 'center'; x.font = 'italic 900 150px ' + F; x.fillText(r.grade, 1010, 302); x.textAlign = 'left';
+    r.rows.slice(0, 4).forEach((row, i) => {
+      const px = 60 + i * 280;
+      x.fillStyle = '#aeb6e8'; x.font = '600 24px ' + F; x.fillText(String(row[0]).toUpperCase(), px, 500);
+      x.fillStyle = '#fff'; x.font = '800 42px ' + F; x.fillText(String(row[1]), px, 550);
+    });
+    x.fillStyle = '#7f88c9'; x.font = '500 24px ' + F; x.fillText('random.plagnito.com/a/aim-trainer · ' + new Date().toLocaleDateString('fr-FR'), 60, 605);
+    c.toBlob((blob) => {
+      if (!blob) { toast("Impossible de créer l'image.", 'info'); return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'aim-trainer-' + r.m.id + '-' + r.score + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('Image du score enregistrée dans tes téléchargements.', 'info');
+    }, 'image/png');
   }
   function drawChart(svg, sr) {
     const W = 300, H = 90, vals = sr.vals, n = vals.length;
@@ -1407,10 +1598,10 @@
     const pct = t.tirs ? Math.round((t.touches / t.tirs) * 100) + ' %' : '—';
     const h = Math.floor(t.sec / 3600), mi = Math.floor((t.sec % 3600) / 60), s = t.sec % 60;
     const time = h ? h + ' h ' + mi + ' min' : mi + ' min ' + s + ' s';
-    const cells = [['Parties jouées', fmt(t.parties)], ['Cibles touchées', fmt(t.touches)], ['Précision globale', pct], ['Temps de jeu', time], ['Meilleure série', fmt(t.serie)]];
+    const cells = [['Parties jouées', fmt(t.parties)], ['Cibles touchées', fmt(t.touches)], ['Précision globale', pct], ['Temps de jeu', time], ['Meilleure série', fmt(t.serie)], ['Défi du jour : série', dailySerie() + ' j']];
     $('#sx-tot').innerHTML = cells.map((r) => '<div class="stat"><div class="k">' + r[0] + '</div><div class="v">' + r[1] + '</div></div>').join('');
     $('#sx-rec').innerHTML = '<tr><th>Mode</th>' + DIFFS.map((d) => '<th class="r">' + d.nom + '</th>').join('') + '</tr>' +
-      MODES.map((m) => '<tr><td>' + m.ic + ' ' + escHtml(m.nom) + '</td>' + DIFFS.map((d) => '<td class="r">' + (bestOf(m.id, d.id) ? fmt(bestOf(m.id, d.id)) : '—') + '</td>').join('') + '</tr>').join('');
+      SCORED.map((m) => '<tr><td>' + m.ic + ' ' + escHtml(m.nom) + '</td>' + DIFFS.map((d) => '<td class="r">' + (bestOf(m.id, d.id) ? fmt(bestOf(m.id, d.id)) : '—') + '</td>').join('') + '</tr>').join('');
     const hist = S.hist.slice(0, 10);
     $('#sx-hist').innerHTML = hist.length
       ? '<tr><th>Mode</th><th>Difficulté</th><th class="r">Score</th><th class="r">Préc.</th><th class="r">Date</th></tr>' + hist.map((r) => {
@@ -1431,8 +1622,9 @@
     $('#r-vol').value = Math.round(o.vol * 100); $('#o-vol').textContent = Math.round(o.vol * 100) + ' %';
     $('#r-xz').value = o.xz; $('#o-xz').textContent = '×' + o.xz.toFixed(1).replace('.', ',');
     const radio = (sel, v) => $$(sel + ' [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === String(v))));
-    radio('#g-ctl', o.ctl); radio('#g-xs', o.xs); radio('#g-xc', o.xc); radio('#g-tc', o.tc);
+    radio('#g-ctl', o.ctl); radio('#g-deco', o.deco); radio('#g-qual', o.qual); radio('#g-xs', o.xs); radio('#g-xc', o.xc); radio('#g-tc', o.tc);
     const fx = $('#t-fx'); fx.textContent = o.fx ? '✨ Effets : activés' : '✨ Effets : réduits'; fx.setAttribute('aria-pressed', String(o.fx));
+    const iv = $('#t-inv'); iv.textContent = o.inv ? '↕️ Axe vertical : inversé' : '↕️ Axe vertical : normal'; iv.setAttribute('aria-pressed', String(o.inv));
     syncSoundButtons();
     drawCross();
   }
@@ -1448,6 +1640,9 @@
       S.opt[key] = b.dataset.v; syncSettings(); if (after) after(); save();
     });
     grp('#g-ctl', 'ctl', () => { sessionCursor = false; updateCursorVisual(); });
+    grp('#g-deco', 'deco', () => { applyTheme(); renderOnce(); });
+    grp('#g-qual', 'qual', () => { autoScale = 1; qAcc = 0; qN = 0; resize(); });
+    $('#t-inv').addEventListener('click', () => { S.opt.inv = !S.opt.inv; syncSettings(); save(); });
     grp('#g-xs', 'xs'); grp('#g-xc', 'xc');
     grp('#g-tc', 'tc', () => { pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } }); renderOnce(); });
     $('#t-mute').addEventListener('click', toggleMute);
@@ -1458,7 +1653,9 @@
 
   // --- Boutons ---
   function bindUi() {
-    $('#br-go').addEventListener('click', () => startGame(selMode.id));
+    $('#br-go').addEventListener('click', () => startGame(selMode.id, briefDaily ? { diff: dailyPlan().diff, daily: true } : {}));
+    $('#dy-go').addEventListener('click', () => openBrief(dailyPlan().mode, true));
+    $('#e-card').addEventListener('click', downloadCard);
     $('#br-back').addEventListener('click', () => showScreen('menu'));
     $('#m-settings').addEventListener('click', () => { syncSettings(); open('settings', 'menu'); });
     $('#m-stats').addEventListener('click', () => { buildStats(); open('stats', 'menu'); });
@@ -1480,7 +1677,7 @@
     $('#p-settings').addEventListener('click', () => { syncSettings(); open('settings', 'pause'); });
     $('#p-quit').addEventListener('click', quitToMenu);
     $('#b-pause').addEventListener('click', pause);
-    $('#e-again').addEventListener('click', () => startGame(G.mode.id));
+    $('#e-again').addEventListener('click', () => startGame(G.mode.id, replayOpts()));
     $('#e-menu').addEventListener('click', quitToMenu);
     $('#e-board').addEventListener('click', () => openBoard('end'));
   }
@@ -1527,7 +1724,7 @@
     const st = $('#e-status');
     if (!caps().classement || !SDK.soumettreScore || score <= 0) return;
     st.className = 'status'; st.textContent = 'Envoi du score au classement…';
-    const detail = (m.nom + ' · ' + DIFFS[G.diff].nom + (m.id === 'suivi' ? '' : m.id === 'reflexes' ? '' : ' · ' + Math.round(acc * 100) + ' %')).slice(0, 40);
+    const detail = ((G.daily ? 'Défi · ' : '') + m.nom + ' · ' + DIFFS[G.diff].nom + (m.id === 'suivi' ? '' : m.id === 'reflexes' ? '' : ' · ' + Math.round(acc * 100) + ' %')).slice(0, 40);
     try {
       const r = await SDK.soumettreScore(score, detail);
       const rang = r && (r.rang || r.rank);
@@ -1578,7 +1775,7 @@
    * 14. Démarrage
    * ===================================================================== */
   function applyAllSettings() {
-    applyFov(); syncSettings(); Snd.refresh(); refreshMenu();
+    applyTheme(); applyFov(); syncSettings(); Snd.refresh(); refreshMenu();
     pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } });
     renderOnce();
   }

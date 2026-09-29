@@ -15,6 +15,13 @@ Site **statique**, sans build : ouvrir `index.html` via un serveur de fichiers (
 Grille · Éclair 360° · Suivi · Précision · Volantes · Réflexes — chacun en Facile / Normal / Difficile (points ×1 / ×1,5 / ×2).
 Cible touchée : 100 points (150 au centre), combo jusqu'à ×4 (+1 toutes les 5 touches d'affilée), note D→S.
 
+## Fonctions en plus des six modes
+- **Échauffement libre** : les cibles de la Grille sans chrono ni score, pour régler sensibilité et viseur (rien n'est enregistré).
+- **Défi du jour** : mode et difficulté tirés de la date (même choix pour tous, sans serveur), avec une série de jours consécutifs.
+- **Fin de partie** : note, progression vers la note suivante, graphique, **carte des tirs** (où tombent tes tirs autour de la cible, biais moyen en texte) et **image du score** à télécharger (générée localement).
+- **Réglages** : sensibilité, champ de vision, axe vertical inversé, viseur, couleur des cibles, décor (Néon / Épuré), qualité graphique (Auto adapte la résolution si l'appareil est lent), volume, effets réduits.
+- **Retours** : tic-tac sur les 3 dernières secondes, carillon quand le combo monte, ★ sur les tirs au centre.
+
 ## Contrôles
 - **Souris** : pointer-lock (style FPS), clic gauche pour tirer (maintenu en mode Suivi). `Échap`/`P` pause, `R` recommencer, `M` son.
 - **Tactile / curseur libre** : toucher une cible pour tirer, glisser pour tourner la vue (mode Éclair 360°).
@@ -24,7 +31,7 @@ Cible touchée : 100 points (150 au centre), combo jusqu'à ×4 (+1 toutes les 5
 - `progression` : réglages, records, stats et historique dans `localStorage` (clé `etat`, quelques Ko).
 - `identite` : le pseudo est affiché sur l'accueil.
 - `classement` (`desc`, points) : score envoyé en fin de partie ; bouton « Classement » seulement si accordé.
-- `succes` : 18 succès (3 secrets) débloqués dans `jeu.js` ; bouton « Succès » seulement si accordé.
+- `succes` : 20 succès (3 secrets) débloqués dans `jeu.js` ; bouton « Succès » seulement si accordé.
 
 Sans SDK, tout le jeu reste jouable ; seuls le classement et les succès disparaissent.
 
