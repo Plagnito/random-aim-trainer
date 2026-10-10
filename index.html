@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Aim Trainer 3D</title>
-  <meta name="description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques." />
+  <meta name="description" content="Entraîne ta visée dans un dojo néon en 3D : huit modes, défi du jour, séances guidées, fantôme de ton record, courbe de progression, carte des tirs et gyroscope sur mobile." />
   <meta name="robots" content="noindex" />
   <meta name="theme-color" content="#101437" />
   <link rel="canonical" href="https://random.plagnito.com/a/aim-trainer/" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Aim Trainer 3D" />
-  <meta property="og:description" content="Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques." />
+  <meta property="og:description" content="Entraîne ta visée dans un dojo néon en 3D : huit modes, défi du jour, séances guidées, fantôme de ton record, courbe de progression, carte des tirs et gyroscope sur mobile." />
   <meta property="og:url" content="https://random.plagnito.com/a/aim-trainer/" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎯%3C/text%3E%3C/svg%3E" />
   <style>
@@ -81,6 +81,14 @@
     .seg small { display: block; font-weight: 500; font-size: .72rem; opacity: .85; }
     .field { display: flex; flex-direction: column; gap: 6px; }
     .field > label, .field > .lbl { font-weight: 700; font-size: .95rem; display: flex; justify-content: space-between; gap: 8px; }
+    .fld { display: flex; flex-direction: column; gap: 4px; font-size: .88rem; font-weight: 700; }
+    .inp { font: inherit; color: var(--txt); background: rgba(255, 255, 255, .06); border: 1.5px solid var(--line); border-radius: 10px; min-height: 44px; padding: 6px 10px; width: 100%; }
+    .inp option { color: #000; }
+    textarea.inp { font-family: ui-monospace, monospace; font-size: .75rem; resize: vertical; }
+    #sx-evm button { flex: 0 0 auto; }
+    details.sv { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    details.sv summary { cursor: pointer; font-weight: 800; min-height: 32px; }
+    details.sv[open] summary { margin-bottom: 8px; }
     .field output { color: var(--gold); font-variant-numeric: tabular-nums; }
     .field .hint { font-size: .8rem; color: var(--dim); }
     input[type=range] { width: 100%; height: 44px; accent-color: var(--pink); background: transparent; }
@@ -139,6 +147,9 @@
     /* Réglages : viseur */
     .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
     .swatch { width: 44px; height: 44px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; }
+    .locked { opacity: .45; position: relative; }
+    .locked::after { content: '🔒'; position: absolute; right: -2px; top: -4px; font-size: .9rem; }
+    .seg .locked::after { display: none; }
     .swatch[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 2px var(--bg), 0 0 14px currentColor; }
     .xh-prev { width: 100%; height: 90px; border-radius: 12px; display: grid; place-items: center;
       background: repeating-linear-gradient(45deg, #1b2260 0 14px, #141a4d 14px 28px); border: 1px solid var(--line); }
@@ -160,8 +171,10 @@
     #h-time.low { color: var(--pink); }
     .bar { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, .15); overflow: hidden; margin-top: 4px; }
     .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--pink)); transform-origin: left; }
+    #h-ghost { font-weight: 800; font-size: clamp(.85rem, 2.8vw, 1.05rem); color: #ff9aa8; font-variant-numeric: tabular-nums; }
+    #h-ghost.ahead { color: var(--green); }
     #h-acc { font-size: clamp(.95rem, 3.2vw, 1.2rem); font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
-    .hud-btns { display: flex; gap: 6px; pointer-events: auto; }
+    .hud-btns { display: flex; gap: 6px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
     .hud-btns .btn { min-height: 44px; min-width: 44px; padding: 4px 10px; font-size: 1.1rem; background: rgba(10, 13, 38, .65); }
     body.verrou .hud-btns { opacity: .55; }
     #h-msg { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 560px);
@@ -207,7 +220,9 @@
     .next-txt { font-size: .9rem; color: var(--dim); margin-bottom: 4px; }
     body { overscroll-behavior: none; }
     @media (max-width: 420px) {
-      .hud-c { min-width: 80px; }
+      .hud-c { min-width: 60px; }
+      .hud-btns { gap: 2px; }
+      #hud { padding-left: 4px; padding-right: 4px; gap: 4px; }
       .lbl { font-size: .6rem; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -239,10 +254,12 @@
     </div>
     <div class="hud-r">
       <div class="hud-btns">
+        <button class="btn" id="b-mus" type="button" aria-label="Couper la musique" aria-pressed="false">🎵</button>
         <button class="btn" id="b-snd" type="button" aria-label="Couper le son" aria-pressed="false">🔊</button>
         <button class="btn" id="b-pause" type="button" aria-label="Mettre en pause">⏸</button>
       </div>
       <div id="h-acc"></div>
+      <div id="h-ghost" hidden aria-label="Écart avec ton fantôme"></div>
     </div>
   </div>
   <div id="h-msg" hidden role="status"></div>
@@ -269,6 +286,14 @@
           <span class="dim" id="dy-info" style="font-size:.85rem"></span>
         </div>
         <button class="btn primary" type="button" id="dy-go">Relever le défi</button>
+      </div>
+      <div class="daily seance" id="seance" style="border-color:var(--cyan);background:linear-gradient(120deg,rgba(45,226,230,.14),rgba(179,136,255,.10))">
+        <div class="tx">
+          <div class="lbl">🏋️ Séance guidée</div>
+          <b id="se-title" style="color:var(--cyan)">Entraînement sur mesure</b>
+          <span class="dim" id="se-info" style="font-size:.85rem"></span>
+        </div>
+        <button class="btn" type="button" id="se-go">Voir la séance</button>
       </div>
       <div class="field">
         <div class="lbl" id="l-diff">Difficulté <small class="dim" id="diff-info"></small></div>
@@ -304,12 +329,37 @@
       </div>
     </section>
 
+    <!-- Séance guidée -->
+    <section class="screen narrow" id="s-seance" tabindex="-1" aria-labelledby="t-seance" hidden>
+      <h2 id="t-seance">🏋️ Séance guidée</h2>
+      <p class="lead">Trois modes à la suite, choisis d'après tes dernières parties : un pour t'échauffer sur ce que tu maîtrises, deux pour travailler le reste.</p>
+      <ol class="rules" id="se-steps"></ol>
+      <p class="dim" id="se-dur"></p>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="se-start">Commencer la séance</button>
+        <button class="btn grow" type="button" id="se-back">Retour</button>
+      </div>
+    </section>
+
+    <!-- Calibrage du gyroscope -->
+    <section class="screen narrow" id="s-calib" tabindex="-1" aria-labelledby="t-calib" hidden>
+      <h2 id="t-calib">🧭 Calibrer le gyroscope</h2>
+      <p class="lead" id="cb-text"></p>
+      <div class="bar"><i id="cb-bar" style="transform:scaleX(0)"></i></div>
+      <div class="status" id="cb-status" role="status"></div>
+      <div class="row">
+        <button class="btn primary grow" type="button" id="cb-go">Commencer</button>
+        <button class="btn grow" type="button" id="cb-back">Retour</button>
+      </div>
+    </section>
+
     <!-- Pause -->
     <section class="screen narrow" id="s-pause" tabindex="-1" aria-labelledby="t-pause" hidden>
       <h2 id="t-pause">Pause</h2>
       <p class="dim" id="pause-info"></p>
       <div class="row" style="flex-direction:column">
         <button class="btn primary" type="button" id="p-resume">Reprendre</button>
+        <button class="btn" type="button" id="p-recenter" hidden>🎯 Recentrer la vue</button>
         <button class="btn" type="button" id="p-restart">Recommencer la partie</button>
         <button class="btn" type="button" id="p-settings">⚙️ Réglages</button>
         <button class="btn danger" type="button" id="p-quit">Quitter vers le menu</button>
@@ -335,6 +385,8 @@
         <div class="next-txt" id="e-next"></div>
         <div class="bar"><i id="e-nextbar"></i></div>
       </div>
+      <div class="daily-ok" id="e-seance" hidden style="border-color:var(--cyan);color:var(--txt);background:rgba(45,226,230,.1);font-weight:500"></div>
+      <div class="chart-cap" id="e-ghost" hidden></div>
       <div class="stats-grid" id="e-stats"></div>
       <div class="duo">
         <div>
@@ -349,7 +401,8 @@
       </div>
       <div class="status" id="e-status" role="status"></div>
       <div class="row">
-        <button class="btn primary grow" type="button" id="e-again">Rejouer</button>
+        <button class="btn primary grow" type="button" id="e-nextstep" hidden>Étape suivante</button>
+        <button class="btn grow" type="button" id="e-again">Rejouer</button>
         <button class="btn grow" type="button" id="e-menu">Autre mode</button>
         <button class="btn grow" type="button" id="e-card">📸 Image du score</button>
         <button class="btn grow" type="button" id="e-board" hidden>🏅 Classement</button>
@@ -381,6 +434,9 @@
           <label for="r-vol">Volume <output id="o-vol"></output></label>
           <input type="range" id="r-vol" min="0" max="100" step="1" />
           <button class="btn" type="button" id="t-mute" aria-pressed="false">🔊 Son activé</button>
+          <label for="r-mus" style="font-weight:700;display:flex;justify-content:space-between;margin-top:6px">Volume de la musique <output id="o-mus"></output></label>
+          <input type="range" id="r-mus" min="0" max="100" step="1" />
+          <button class="btn" type="button" id="t-mus" aria-pressed="false">🎵 Musique : activée</button>
         </div>
       </div>
       <div class="two">
@@ -407,8 +463,22 @@
         <div class="field" id="f-gyro" hidden>
           <div class="lbl">Téléphone</div>
           <button class="btn" type="button" id="t-gyro" aria-pressed="false">📱 Visée au gyroscope : désactivée</button>
-          <span class="hint">Expérimental : la vue suit les mouvements du téléphone et un toucher tire au centre. Si le haut et le bas te semblent inversés, utilise « Axe vertical ».</span>
+          <span class="hint">Expérimental : la vue suit les mouvements du téléphone et un toucher tire au centre. Si le haut et le bas te semblent inversés, lance le calibrage ci-dessous.</span>
+          <div class="row"><button class="btn grow" type="button" id="t-gcal">🧭 Calibrer</button><button class="btn grow" type="button" id="t-gcal-reset">Réinitialiser</button></div>
         </div>
+      </div>
+      <div class="field" id="f-cm">
+        <div class="lbl">Sensibilité réelle <output id="o-cm"></output></div>
+        <span class="hint">Distance dont tu bouges la souris pour faire un tour complet (cm/360°). Pratique pour retrouver la sensibilité d'un autre jeu.</span>
+        <div class="two">
+          <label class="fld">Résolution de ta souris (DPI)<input class="inp" type="number" id="r-dpi" min="100" max="32000" step="50" inputmode="numeric" /></label>
+          <label class="fld">Convertir depuis<select class="inp" id="cv-game"></select></label>
+          <label class="fld"><span id="cv-lbl-t">Sensibilité dans ce jeu</span><input class="inp" type="number" id="cv-sens" min="0.001" step="0.01" value="1" inputmode="decimal" /></label>
+        </div>
+        <button class="btn" type="button" id="cv-go">Convertir et appliquer</button>
+        <span class="hint" id="cv-res" role="status"></span>
+        <button class="btn" type="button" id="t-gh" aria-pressed="true" style="margin-top:6px">👻 Fantôme du record : affiché</button>
+        <span class="hint">Pendant une partie, compare ton score à celui de ton meilleur essai au même instant.</span>
       </div>
       <div class="two">
         <div class="field">
@@ -424,7 +494,11 @@
           <div class="xh-prev" id="xh-prev" aria-hidden="true"></div>
           <div class="lbl" id="l-tc" style="margin-top:6px">Couleur des cibles</div>
           <div class="swatches" id="g-tc" role="radiogroup" aria-labelledby="l-tc"></div>
-          <span class="hint">Les cibles se lisent aussi à leurs anneaux : le centre est toujours clair.</span>
+          <span class="hint">Les cibles se lisent aussi à leurs anneaux : le centre est toujours clair. 🔒 = à débloquer en jouant (touche l'élément pour voir comment).</span>
+          <div class="lbl" id="l-sk" style="margin-top:6px">Aspect des cibles</div>
+          <div class="seg" id="g-sk" role="radiogroup" aria-labelledby="l-sk"></div>
+          <button class="btn" type="button" id="t-cb" aria-pressed="false" style="margin-top:6px">👁️ Aide daltonisme : désactivée</button>
+          <span class="hint">Croix sombre au centre des cibles, et cible qui va disparaître : elle pulse et clignote en blanc (plus seulement en rouge).</span>
           <button class="btn" type="button" id="t-fx" aria-pressed="true" style="margin-top:6px">✨ Effets : activés</button>
         </div>
       </div>
@@ -444,6 +518,16 @@
         <div class="chart-cap" id="sx-evcap"></div>
       </div>
       <div>
+        <h3>Analyse avancée <small class="dim">(mode choisi ci-dessus)</small></h3>
+        <div class="duo">
+          <div class="stats-grid" id="sx-adv" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))"></div>
+          <div>
+            <svg class="map" id="sx-heat" viewBox="-4.5 -4.5 9 9" role="img" aria-label="Carte de chaleur cumulée de tes tirs ratés autour de la cible"></svg>
+            <div class="chart-cap" id="sx-heatcap" style="margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+      <div>
         <h3>Records</h3>
         <div class="scroll"><table id="sx-rec"></table></div>
       </div>
@@ -451,6 +535,18 @@
         <h3>Dernières parties</h3>
         <div class="scroll"><table id="sx-hist"></table></div>
       </div>
+      <details class="sv" id="sv">
+        <summary>💾 Sauvegarde : exporter ou importer ma progression</summary>
+        <p class="dim" style="margin:0 0 8px">Ta progression reste dans ce navigateur. Pour la garder ou la passer sur un autre appareil, génère un code, copie-le, puis colle-le ici sur l'autre appareil.</p>
+        <label for="sv-text" class="lbl">Code de sauvegarde</label>
+        <textarea class="inp" id="sv-text" rows="4" spellcheck="false" autocomplete="off" placeholder="Le code apparaît ici. Pour importer, colle-le ici."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="btn grow" type="button" id="sv-export">Générer mon code</button>
+          <button class="btn grow" type="button" id="sv-copy">Copier</button>
+          <button class="btn danger grow" type="button" id="sv-import">Importer ce code</button>
+        </div>
+        <div class="status" id="sv-status" role="status"></div>
+      </details>
       <div class="row">
         <button class="btn primary grow" type="button" id="sx-back">Retour</button>
         <button class="btn danger grow" type="button" id="sx-clear">Effacer mes stats</button>
@@ -483,7 +579,7 @@
           <ul class="rules">
             <li><b>Souris</b> : bouge pour viser, clic gauche pour tirer (maintiens-le en mode Suivi).</li>
             <li><b>Tactile / curseur libre</b> : touche une cible pour tirer, glisse le doigt pour tourner la vue.</li>
-            <li><span class="kbd">Échap</span> ou <span class="kbd">P</span> : pause. <span class="kbd">R</span> : recommencer. <span class="kbd">M</span> : couper le son.</li>
+            <li><span class="kbd">Échap</span> ou <span class="kbd">P</span> : pause. <span class="kbd">R</span> : recommencer. <span class="kbd">M</span> : couper le son. <span class="kbd">N</span> : couper la musique.</li>
             <li>Une flèche dorée t'indique où est la cible quand elle est hors de l'écran.</li>
             <li><b>Sur téléphone</b>, tu peux activer la visée au gyroscope dans les réglages (expérimental).</li>
           </ul>
@@ -497,11 +593,14 @@
             <li>Les notes vont de D à <b>S</b>, selon ton score dans le mode.</li>
             <li><b>Défi du jour</b> : un mode et une difficulté changent chaque jour. Relève-le jour après jour pour allonger ta série.</li>
             <li><b>Carte des tirs</b> : en fin de partie, vois où tombent tes tirs autour de la cible pour corriger ton biais.</li>
+            <li><b>Fantôme</b> : en jouant, un compteur 👻 t'indique si tu es devant ou derrière ton meilleur essai au même instant.</li>
+            <li><b>Séance guidée</b> : trois modes à la suite, choisis d'après tes statistiques.</li>
+            <li><b>À débloquer</b> : de nouvelles couleurs de cibles, viseurs et aspects (🔒 dans les réglages) arrivent avec ta progression.</li>
           </ul>
         </div>
       </div>
       <div>
-        <h3>Les six modes</h3>
+        <h3>Les huit modes</h3>
         <ul class="rules" id="help-modes"></ul>
       </div>
       <div class="row"><button class="btn primary grow" type="button" id="hp-back">Retour</button></div>

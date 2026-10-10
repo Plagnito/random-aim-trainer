@@ -43,6 +43,14 @@
     { id: 'vert', nom: 'Vert', hex: '#7dff6a' },
     { id: 'orange', nom: 'Orange', hex: '#ff9f1c' },
     { id: 'violet', nom: 'Violet', hex: '#b388ff' },
+    { id: 'or', nom: 'Or', hex: '#ffd166' },
+    { id: 'glace', nom: 'Blanc glacé', hex: '#e8f0ff' },
+    { id: 'arc', nom: 'Arc-en-ciel', hex: '#ff3d7f' },
+  ];
+  const SKINS = [
+    { id: 'classique', nom: 'Classique', info: 'anneaux lisses' },
+    { id: 'holo', nom: 'Hologramme', info: 'lignes de balayage' },
+    { id: 'damier', nom: 'Damier', info: 'motif à carreaux' },
   ];
   const XCOLORS = [
     { id: '#2de2e6', nom: 'Cyan' },
@@ -57,6 +65,8 @@
     { id: 'cercle', nom: 'Cercle' },
     { id: 'cible', nom: 'Cercle et point' },
     { id: 't', nom: 'Croix en T' },
+    { id: 'losange', nom: 'Losange' },
+    { id: 'etoile', nom: 'Étoile' },
   ];
   const PSIZES = [
     { id: 'large', nom: 'Larges', k: 1.4, mult: 0.8 },
@@ -65,7 +75,20 @@
     { id: 'minuscule', nom: 'Minuscules', k: 0.5, mult: 1.7 },
   ];
   const recKey = (id, diff, psIdx) => id + ':' + diff + (id === 'precision' && psIdx !== 1 ? ':' + PSIZES[psIdx].id : '');
-  const BULL = 0.35; // rayon relatif du centre de la cible
+  const BULL = 0.35;
+  const bestAny = () => Object.keys(S.rec).reduce((m, k) => Math.max(m, S.rec[k]), 0);
+  const hasGradeS = () => SCORED.some((m) => DIFFS.some((d) => (S.rec[m.id + ':' + d.id] || 0) / d.mult >= m.grades[3]));
+  const COS = {
+    'tc:or': ['Marque 5 000 points dans une seule partie.', () => bestAny() >= 5000],
+    'tc:glace': ['Atteins 75 % de précision globale (100 tirs au moins).', () => S.tot.tirs >= 100 && S.tot.touches / S.tot.tirs >= 0.75],
+    'tc:arc': ['Obtiens la note S dans un mode.', hasGradeS],
+    'xs:losange': ['Enchaîne 15 cibles touchées sans rater.', () => S.tot.serie >= 15],
+    'xs:etoile': ['Touche 300 cibles au total.', () => S.tot.touches >= 300],
+    'tskin:holo': ['Joue une partie dans chacun des huit modes.', () => SCORED.every((m) => S.modes.indexOf(m.id) >= 0)],
+    'tskin:damier': ['Relève le défi du jour trois jours de suite.', () => S.tot.dmax >= 3],
+  };
+  const cosOk = (kind, id) => { const c = COS[kind + ':' + id]; return !c || !!c[1](); };
+  const cosName = (kind, id) => { const l = kind === 'tc' ? TCOLORS : kind === 'xs' ? XSTYLES : SKINS; const o = l.find((x) => x.id === id); return o ? o.nom : id; }; // rayon relatif du centre de la cible
 
   const ACH = [
     ['premiere-cible', 'Première cible', 'Toucher une cible pour la première fois.'],
@@ -77,13 +100,16 @@
     ['dix-mille', 'Dix mille', 'Marquer 10 000 points dans une seule partie.'],
     ['doigts-eclair', "Doigts d'éclair", 'Toucher la cible en moins de 200 ms en mode Réflexes.'],
     ['colle-a-la-cible', 'Collé à la cible', 'Rester au moins 80 % du temps sur la cible en mode Suivi.'],
-    ['touche-a-tout', 'Touche-à-tout', 'Jouer une partie dans chacun des six modes.'],
+    ['touche-a-tout', 'Touche-à-tout', 'Jouer une partie dans chacun des huit modes.'],
     ['sans-filet', 'Sans filet', 'Finir une partie en Difficile avec 70 % de précision ou plus (20 tirs minimum).'],
     ['centenaire', 'Centenaire', 'Toucher 100 cibles au total.'],
     ['habitue', 'Habitué du dojo', 'Jouer 10 parties.'],
     ['defi-du-jour', 'Défi relevé', 'Terminer le défi du jour.'],
     ['serie-3-jours', 'Trois jours de suite', 'Relever le défi du jour trois jours de suite.'],
     ['microscope', 'Microscope', 'Marquer 3 000 points en Précision avec des cibles minuscules.'],
+    ['seance-complete', 'Séance complète', 'Terminer une séance guidée de trois modes.'],
+    ['remontada', 'Remontada', 'Battre ton record après avoir été derrière ton fantôme à mi-parcours.'],
+    ['salve-eclair', 'Salve éclair', 'Vider une salve de 5 cibles en moins de 2 secondes en mode Rafale.'],
     ['note-s', 'Note S', "Obtenir la note S dans n'importe quel mode."],
     ['record-battu', 'Toujours plus haut', "Battre l'un de tes propres records."],
     ['millier', 'Millier', 'Toucher 1 000 cibles au total.', true],
@@ -98,14 +124,17 @@
   function defaults() {
     return {
       v: 1,
-      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true, inv: false, deco: 'neon', qual: 'auto', gyro: false, psz: 1 },
+      opt: { sens: 1, fov: 90, xs: 'croix', xc: '#2de2e6', xz: 1, vol: 0.6, mute: false, ctl: COARSE ? 'curseur' : 'verrou', diff: 1, tc: 'rose', fx: true, inv: false, deco: 'neon', qual: 'auto', gyro: false, psz: 1, gcal: '', dpi: 800, gh: true, cb: false, mus: true, musv: 0.5, tskin: 'classique' },
       rec: {},
-      tot: { parties: 0, tirs: 0, touches: 0, sec: 0, serie: 0 },
+      tot: { parties: 0, tirs: 0, touches: 0, sec: 0, serie: 0, seances: 0, dmax: 0 },
       hist: [],
       succ: [],
       modes: [],
       jour: { d: '', s: 0, serie: 0 },
       ev: {},
+      gh: {},
+      adv: {},
+      cu: [],
     };
   }
   function normalize(raw) {
@@ -123,6 +152,10 @@
     if (!TCOLORS.some((x) => x.id === d.opt.tc)) d.opt.tc = 'rose';
     if (d.opt.ctl !== 'verrou' && d.opt.ctl !== 'curseur') d.opt.ctl = 'verrou';
     d.opt.psz = clamp(Math.round(d.opt.psz), 0, 3);
+    d.opt.dpi = clamp(Math.round(d.opt.dpi), 100, 32000);
+    d.opt.musv = clamp(d.opt.musv, 0, 1);
+    if (!/^\d{1,3}:[abg][+-]:[abg][+-]$/.test(d.opt.gcal)) d.opt.gcal = '';
+    if (!SKINS.some((x) => x.id === d.opt.tskin)) d.opt.tskin = 'classique';
     if (d.opt.deco !== 'neon' && d.opt.deco !== 'epure') d.opt.deco = 'neon';
     if (['auto', 'eco', 'haute'].indexOf(d.opt.qual) < 0) d.opt.qual = 'auto';
     if (raw.rec && typeof raw.rec === 'object') Object.keys(raw.rec).forEach((k) => { if (Number.isFinite(raw.rec[k])) d.rec[k] = raw.rec[k]; });
@@ -135,6 +168,20 @@
         if (Array.isArray(raw.ev[k])) d.ev[k] = raw.ev[k].filter((v) => Number.isFinite(v)).slice(-30);
       });
     }
+    if (raw.gh && typeof raw.gh === 'object') {
+      Object.keys(raw.gh).slice(0, 80).forEach((k) => {
+        if (Array.isArray(raw.gh[k])) d.gh[k] = raw.gh[k].filter((v) => Number.isFinite(v)).slice(0, 130).map(Math.round);
+      });
+    }
+    if (raw.adv && typeof raw.adv === 'object') {
+      Object.keys(raw.adv).slice(0, 12).forEach((k) => {
+        const a = raw.adv[k];
+        if (!a || typeof a !== 'object') return;
+        const h = Array.isArray(a.h) && a.h.length === 81 ? a.h.map((v) => (Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0)) : new Array(81).fill(0);
+        d.adv[k] = { n: Number.isFinite(a.n) ? a.n : 0, k: Number.isFinite(a.k) ? a.k : 0, t: Number.isFinite(a.t) ? a.t : 0, q: Number.isFinite(a.q) ? a.q : 0, h };
+      });
+    }
+    if (Array.isArray(raw.cu)) d.cu = raw.cu.filter((s) => typeof s === 'string').slice(0, 30);
     if (raw.jour && typeof raw.jour === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(raw.jour.d || '')) {
       d.jour = { d: raw.jour.d, s: Number.isFinite(raw.jour.s) ? raw.jour.s : 0, serie: Number.isFinite(raw.jour.serie) ? clamp(Math.round(raw.jour.serie), 0, 9999) : 0 };
     }
@@ -203,6 +250,37 @@
       s.connect(f); f.connect(a); a.connect(master);
       s.start(t); s.stop(t + dur + 0.02);
     }
+    // Musique : boucle synthwave générée (basse, kick, charleston, arpège, nappe), planifiée par petits paquets
+    let musG = null, musTimer = 0, musStep = 0, musNext = 0;
+    const mf = (n) => 440 * Math.pow(2, (n - 69) / 12), BASS = [33, 29, 36, 31], CH = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], SD = 60 / 104 / 4;
+    const musLevel = () => (S.opt.mute || !S.opt.mus ? 0 : S.opt.musv * 0.5);
+    function note(f, t, dur, type, g, lp) {
+      const o = ctx.createOscillator(), a = ctx.createGain();
+      o.type = type; o.frequency.value = f;
+      a.gain.setValueAtTime(0.0001, t); a.gain.exponentialRampToValueAtTime(g, t + 0.01); a.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      if (lp) { const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; o.connect(fl); fl.connect(a); } else o.connect(a);
+      a.connect(musG); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function musStepAt(i, t) {
+      const s = i % 16, bar = Math.floor(i / 16) % 4, root = BASS[bar], ch = CH[bar];
+      if (s % 4 === 0) { const o = ctx.createOscillator(), a = ctx.createGain(); o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14); a.gain.setValueAtTime(0.7, t); a.gain.exponentialRampToValueAtTime(0.0001, t + 0.18); o.connect(a); a.connect(musG); o.start(t); o.stop(t + 0.2); }
+      if (s % 2 === 0) { const b = ctx.createBufferSource(); b.buffer = noiseBuf; const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7500; const a = ctx.createGain(); a.gain.setValueAtTime(s % 4 === 2 ? 0.2 : 0.08, t); a.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); b.connect(f); f.connect(a); a.connect(musG); b.start(t); b.stop(t + 0.06); }
+      if (s % 2 === 0) note(mf(root + (s % 8 === 6 ? 12 : 0)), t, SD * 1.7, 'sawtooth', 0.2, 520);
+      if (s % 2 === 1) note(mf(ch[(s >> 1) % 3] + 12), t, SD * 1.2, 'triangle', 0.06);
+      if (s === 0) ch.forEach((n) => note(mf(n), t, SD * 15, 'triangle', 0.05, 1400));
+    }
+    function musTick() {
+      if (!ctx) return;
+      while (musNext < ctx.currentTime + 0.3) { musStepAt(musStep, musNext); musNext += SD; musStep++; }
+    }
+    function music(want) {
+      if (!ctx || !noiseBuf) return;
+      if (!musG) { musG = ctx.createGain(); musG.gain.value = 0; musG.connect(master); }
+      const on = want && musLevel() > 0 && level() > 0;
+      musG.gain.setTargetAtTime(on ? musLevel() : 0, ctx.currentTime, on ? 0.25 : 0.06);
+      if (on && !musTimer) { musNext = ctx.currentTime + 0.08; musStep = 0; musTimer = setInterval(musTick, 80); musTick(); }
+      else if (!on && musTimer) { clearInterval(musTimer); musTimer = 0; }
+    }
     function humStart() {
       if (!live() || humO) return;
       humO = ctx.createOscillator(); humG = ctx.createGain();
@@ -220,7 +298,7 @@
       humO = humG = null;
     }
     return {
-      unlock, refresh, humStart, humSet, humStop,
+      unlock, refresh, humStart, humSet, humStop, music, isMusic: () => !!musTimer,
       shoot() { noise(0.05, 0.22, 2500); tone(260, 70, 0.09, 'square', 0.12); },
       hit(mult, bull) {
         const f = 560 * (1 + 0.14 * (mult - 1));
@@ -465,7 +543,7 @@
   const targetGeo = new THREE.SphereGeometry(1, 36, 24);
   const VERT = 'varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vP = mv.xyz; gl_Position = projectionMatrix * mv; }';
   const FRAG = [
-    'uniform vec3 uColor; uniform float uFlash; uniform float uHot; uniform float uWarn; uniform float uTime;',
+    'uniform vec3 uColor; uniform float uFlash; uniform float uHot; uniform float uWarn; uniform float uTime; uniform float uCB; uniform float uSkin;',
     'varying vec3 vN; varying vec3 vP;',
     'void main(){',
     '  vec3 n = normalize(vN); vec3 v = normalize(-vP);',
@@ -480,15 +558,22 @@
     '  col *= 0.86 + 0.14 * n.y;',
     '  col += uColor * pow(1.0 - c, 3.0) * 0.7;',
     '  col = mix(col, vec3(1.0), uHot * 0.45);',
+    '  float sk1 = 1.0 - step(0.5, abs(uSkin - 1.0)); float sk2 = 1.0 - step(0.5, abs(uSkin - 2.0));',
+    '  float scan = step(0.5, fract(n.y * 7.0 + uTime * 0.6));',
+    '  col *= 1.0 + sk1 * (scan - 0.5) * 0.55;',
+    '  float ch = mod(floor(n.x * 5.0 + 10.0) + floor(n.y * 5.0 + 10.0), 2.0);',
+    '  col *= 1.0 - sk2 * 0.3 * ch;',
+    '  float xl = (1.0 - smoothstep(0.05, 0.09, abs(n.x))) + (1.0 - smoothstep(0.05, 0.09, abs(n.y)));',
+    '  col = mix(col, vec3(0.04, 0.03, 0.12), clamp(xl, 0.0, 1.0) * core * uCB * 0.9);',
     '  float blink = step(0.0, sin(uTime * 26.0));',
-    '  col = mix(col, vec3(1.0, 0.15, 0.2), uWarn * blink * 0.65);',
+    '  col = mix(col, mix(vec3(1.0, 0.15, 0.2), vec3(1.0), uCB), uWarn * blink * 0.65);',
     '  col += vec3(uFlash);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}',
   ].join('\n');
   const pool = [];
   function makeTarget() {
-    const u = { uColor: { value: new THREE.Color('#ff3d7f') }, uFlash: { value: 0 }, uHot: { value: 0 }, uWarn: { value: 0 }, uTime: { value: 0 } };
+    const u = { uColor: { value: new THREE.Color('#ff3d7f') }, uFlash: { value: 0 }, uHot: { value: 0 }, uWarn: { value: 0 }, uTime: { value: 0 }, uCB: { value: 0 }, uSkin: { value: 0 } };
     const mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG });
     const mesh = new THREE.Mesh(targetGeo, mat);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff3d7f, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0.8 }));
@@ -499,7 +584,10 @@
     return { mesh, glow, u, alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), r: 1, born: 0, ready: 0, life: 0, pop: 1, deco: false };
   }
   for (let i = 0; i < 8; i++) pool.push(makeTarget());
-  const tColor = () => (TCOLORS.find((c) => c.id === S.opt.tc) || TCOLORS[0]).hex;
+  // Couleur des cibles : « arc » tire une teinte différente à chaque cible ; tBase() donne une couleur fixe (carte des tirs, aperçus)
+  const tBase = () => { const c = TCOLORS.find((x) => x.id === S.opt.tc) || TCOLORS[0]; return cosOk('tc', c.id) ? c.hex : TCOLORS[0].hex; };
+  const tColor = () => (S.opt.tc === 'arc' && cosOk('tc', 'arc') ? '#' + new THREE.Color().setHSL(Math.random(), 1, 0.62).getHexString() : tBase());
+  const skinIdx = () => { const i = SKINS.findIndex((x) => x.id === S.opt.tskin); return i > 0 && cosOk('tskin', S.opt.tskin) ? i : 0; };
 
   let autoScale = 1, qAcc = 0, qN = 0;
   function pixelRatio() {
@@ -531,6 +619,24 @@
     camera.fov = clamp(v, 35, 105);
     camera.updateProjectionMatrix();
   }
+  // Angle (rad) par « count » de souris : indépendant de la forme de la fenêtre, donc convertible en cm/360°
+  const radPerCount = () => 0.0012 * S.opt.sens * (S.opt.fov / 115);
+  const cm360 = () => ((Math.PI * 2) / radPerCount() / S.opt.dpi) * 2.54;
+  const GAMES = [
+    { id: 'valorant', nom: 'Valorant', yaw: 0.07 },
+    { id: 'cs2', nom: 'Counter-Strike 2 / CS:GO', yaw: 0.022 },
+    { id: 'apex', nom: 'Apex Legends', yaw: 0.022 },
+    { id: 'ow2', nom: 'Overwatch 2', yaw: 0.0066 },
+    { id: 'cm', nom: 'Une valeur en cm/360° (déjà connue)', yaw: 0 },
+  ];
+  function convertSens() {
+    const g = GAMES.find((x) => x.id === $('#cv-game').value) || GAMES[0], v = parseFloat(String($('#cv-sens').value).replace(',', '.')), out = $('#cv-res');
+    if (!(v > 0)) { out.textContent = 'Entre une valeur supérieure à zéro.'; return; }
+    const counts = g.yaw ? 360 / (g.yaw * v) : (v / 2.54) * S.opt.dpi; // counts de souris pour un tour complet
+    const raw = (Math.PI * 2) / (0.0012 * (S.opt.fov / 115) * counts), sens = clamp(Math.round(raw * 100) / 100, 0.2, 3);
+    S.opt.sens = sens; syncSettings(); save();
+    out.textContent = raw < 0.2 || raw > 3 ? 'Cette valeur dépasse la plage du curseur : sensibilité ramenée à ' + String(sens).replace('.', ',') + '.' : 'Sensibilité réglée sur ' + String(sens).replace('.', ',') + ' (≈ ' + Math.round(cm360()) + ' cm/360°).';
+  }
   function radPerPx() {
     const hf = 2 * Math.atan(Math.tan(camera.fov * DEG / 2) * camera.aspect);
     return hf / Math.max(1, innerWidth);
@@ -550,9 +656,10 @@
    * ===================================================================== */
   const fxEl = $('#fx'), crossEl = $('#cross'), crossIn = $('#cross-in'), hitm = $('#hitm'), arrowEl = $('#arrow');
   function xhSVG(style, color, px) {
-    const path = style === 'croix' ? 'M20 4V14M20 26V36M4 20H14M26 20H36' : style === 't' ? 'M20 25V36M4 20H14M26 20H36' : '';
+    const path = style === 'croix' ? 'M20 4V14M20 26V36M4 20H14M26 20H36' : style === 't' ? 'M20 25V36M4 20H14M26 20H36'
+      : style === 'losange' ? 'M20 6L34 20L20 34L6 20Z' : style === 'etoile' ? 'M20 5V13M20 27V35M5 20H13M27 20H35M10 10L15 15M30 10L25 15M10 30L15 25M30 30L25 25' : '';
     const circ = style === 'cercle' || style === 'cible' ? '<circle cx="20" cy="20" r="11"/>' : '';
-    const dotR = style === 'point' ? 3.2 : style === 'cible' ? 2.2 : style === 't' ? 1.8 : 0;
+    const dotR = style === 'point' ? 3.2 : style === 'cible' ? 2.2 : style === 't' ? 1.8 : style === 'losange' ? 1.6 : 0;
     const layer = (stroke, w, fill) =>
       '<g fill="none" stroke="' + stroke + '" stroke-width="' + w + '" stroke-linecap="round">' + (path ? '<path d="' + path + '"/>' : '') + circ + '</g>' +
       (dotR ? '<circle cx="20" cy="20" r="' + (dotR + (fill === '#000' ? 1.3 : 0)) + '" fill="' + fill + '"/>' : '');
@@ -659,13 +766,70 @@
     const now = performance.now(), dt = gyro.last ? Math.min(0.1, (now - gyro.last) / 1000) : 0;
     gyro.last = now;
     if (!dt) return;
-    const b = (rr.beta || 0) * DEG, g = (rr.gamma || 0) * DEG;
+    const b = (rr.beta || 0) * DEG, g = (rr.gamma || 0) * DEG, al = (rr.alpha || 0) * DEG;
     const o = window.screen && window.screen.orientation;
     const a = (((o && o.angle) || window.orientation || 0) % 360 + 360) % 360;
     let y, p;
-    if (a === 90) { y = b; p = g; } else if (a === 180) { y = -g; p = b; } else if (a === 270) { y = -b; p = -g; } else { y = g; p = -b; }
+    const gc = parseGcal();
+    if (gc && gc.angle === a) { const v = { a: al, b, g }; y = gc.ys * v[gc.ya]; p = gc.ps * v[gc.pa]; }
+    else if (a === 90) { y = b; p = g; } else if (a === 180) { y = -g; p = b; } else if (a === 270) { y = -b; p = -g; } else { y = g; p = -b; }
     view.yaw = wrapAngle(view.yaw + y * dt * S.opt.sens);
     view.pitch += p * dt * S.opt.sens * (S.opt.inv ? -1 : 1);
+  }
+  // Calibrage : on mesure quel axe du capteur correspond à « lever le regard » et « tourner à droite »
+  let gcalSrc = null, gcalVal = null;
+  function parseGcal() {
+    if (gcalSrc !== S.opt.gcal) {
+      gcalSrc = S.opt.gcal;
+      const m = /^(\d{1,3}):([abg])([+-]):([abg])([+-])$/.exec(gcalSrc || '');
+      gcalVal = m ? { angle: +m[1], ya: m[2], ys: m[3] === '+' ? 1 : -1, pa: m[4], ps: m[5] === '+' ? 1 : -1 } : null;
+    }
+    return gcalVal;
+  }
+  const orientAngle = () => { const o = window.screen && window.screen.orientation; return (((o && o.angle) || window.orientation || 0) % 360 + 360) % 360; };
+  const cal = { step: 0, acc: null, last: 0, busy: false, up: null, timer: 0 };
+  function calEvent(e) {
+    const rr = e.rotationRate; if (!rr || !cal.busy) return;
+    const now = performance.now(), dt = cal.last ? Math.min(0.1, (now - cal.last) / 1000) : 0; cal.last = now;
+    cal.acc.a += (rr.alpha || 0) * dt; cal.acc.b += (rr.beta || 0) * dt; cal.acc.g += (rr.gamma || 0) * dt; cal.seen = true;
+  }
+  const CAL_TXT = [
+    "Tiens ton téléphone comme pour jouer. Quand tu appuies sur « Commencer », lève lentement le haut du téléphone vers le plafond, comme pour viser plus haut (environ 2 secondes).",
+    'Étape 2 sur 2. Reviens droit devant toi, puis tourne-toi lentement vers ta droite, téléphone toujours devant toi (environ 2 secondes).',
+  ];
+  function calibShow(msg, cls) {
+    $('#cb-text').textContent = cal.step >= 2 ? 'Calibrage terminé : la vue suit maintenant ton téléphone dans le bon sens.' : CAL_TXT[cal.step];
+    $('#cb-go').textContent = cal.step >= 2 ? 'Terminé' : cal.step === 1 ? 'Étape 2 : commencer' : 'Commencer';
+    const st = $('#cb-status'); st.className = 'status ' + (cls || ''); st.textContent = msg || '';
+  }
+  function openCalib() {
+    if (!S.opt.gyro) { toast("Active d'abord la visée au gyroscope.", 'info'); return; }
+    cal.step = 0; cal.up = null; cal.busy = false;
+    calibShow('');
+    $('#cb-bar').style.transition = 'none'; $('#cb-bar').style.transform = 'scaleX(0)';
+    calBack = backTo;
+    open('calib', 'settings');
+  }
+  let calBack = 'menu';
+  function calGo() {
+    if (cal.busy) return;
+    if (cal.step >= 2) { backTo = calBack; showScreen('settings'); return; }
+    cal.acc = { a: 0, b: 0, g: 0 }; cal.last = 0; cal.seen = false; cal.busy = true;
+    addEventListener('devicemotion', calEvent);
+    calibShow('Bouge maintenant…');
+    const bar = $('#cb-bar'); bar.style.transition = 'none'; bar.style.transform = 'scaleX(0)'; void bar.offsetWidth; bar.style.transition = 'transform 2.4s linear'; bar.style.transform = 'scaleX(1)';
+    cal.timer = setTimeout(calEval, 2400);
+  }
+  function calEval() {
+    cal.busy = false; removeEventListener('devicemotion', calEvent);
+    const A = cal.acc, ks = ['a', 'b', 'g'].sort((x, y) => Math.abs(A[y]) - Math.abs(A[x])), top = ks[0], second = ks[1];
+    if (!cal.seen) { calibShow("Aucun mouvement détecté : le capteur ne répond pas. Réessaie ou désactive le gyroscope.", 'ko'); return; }
+    if (Math.abs(A[top]) < 20 || Math.abs(A[top]) < 1.6 * Math.abs(A[second])) { calibShow('Mouvement trop faible ou pas assez net. Refais-le plus ample, bien dans une seule direction.', 'ko'); return; }
+    if (cal.step === 0) { cal.up = { ax: top, sg: A[top] > 0 ? 1 : -1 }; cal.step = 1; calibShow('Étape 1 enregistrée ✓', 'ok'); return; }
+    if (top === cal.up.ax) { cal.step = 0; calibShow("Les deux mouvements ont utilisé le même axe : recommence depuis l'étape 1 en bougeant bien dans deux directions différentes.", 'ko'); return; }
+    // tourner à droite doit faire diminuer le yaw ; lever le regard doit faire augmenter le pitch
+    S.opt.gcal = orientAngle() + ':' + top + (A[top] > 0 ? '-' : '+') + ':' + cal.up.ax + (cal.up.sg > 0 ? '+' : '-');
+    save(true); cal.step = 2; calibShow('Réglage enregistré ✓', 'ok');
   }
   function gyroSync() {
     removeEventListener('devicemotion', gyroEvent);
@@ -689,7 +853,7 @@
     return {
       mode, diff, dm: DIFFS[diff], t: 0, dur, cd: 3, score: 0, shots: 0, hits: 0, miss: 0, expired: 0, streak: 0, best: 0, mult: 1, bulls: 0,
       ms: { round: 0, phase: 'wait', times: [], pts: [], falseStarts: 0, longest: 0 }, started: false, daily: false, shotLog: [], lastTick: 0, kill: [], slices: new Array(Math.max(1, Math.ceil((dur || 50) / 5))).fill(0), lastHit: 0, missRun: 0, firing: false, onTime: 0, targets: pool, over: false,
-      hudCache: {}, prevRecord: 0, ps: null, psIdx: 1, k: 1, sliceOn: [],
+      hudCache: {}, prevRecord: 0, ps: null, psIdx: 1, k: 1, sliceOn: [], pace: [], ghost: null, ghostRes: null, seance: null,
     };
   }
   function clearTargets() { pool.forEach((t) => { t.alive = false; t.deco = false; t.mesh.visible = false; }); }
@@ -701,7 +865,8 @@
     tg.born = G.t; tg.ready = Math.max(G.t, G.lastHit); tg.life = opt.life || 0; tg.pop = 0;
     tg.mesh.visible = true; tg.mesh.position.copy(pos); tg.mesh.scale.setScalar(0.001);
     const c = tColor();
-    tg.u.uColor.value.set(c); tg.glow.material.color.set(c);
+    tg.hex = c; tg.u.uColor.value.set(c); tg.glow.material.color.set(c);
+    tg.u.uCB.value = S.opt.cb ? 1 : 0; tg.u.uSkin.value = skinIdx();
     tg.u.uHot.value = 0; tg.u.uWarn.value = 0; tg.u.uFlash.value = 0.7;
     return tg;
   }
@@ -711,7 +876,7 @@
     for (const t of pool) {
       if (!t.alive || t.deco) continue;
       if (t.pop < 1) { t.pop = Math.min(1, t.pop + dt / 0.16); }
-      t.mesh.scale.setScalar(Math.max(0.001, t.r * easeBack(t.pop)));
+      t.mesh.scale.setScalar(Math.max(0.001, t.r * easeBack(t.pop) * (S.opt.cb && t.u.uWarn.value ? 1 + 0.12 * Math.sin(nowS * 26) : 1)));
       t.mesh.position.copy(t.pos);
       t.u.uFlash.value = Math.max(0, t.u.uFlash.value - dt * 3);
       t.u.uTime.value = nowS;
@@ -757,7 +922,7 @@
     G.kill.push(G.t - tg.ready);
     G.slices[Math.min(G.slices.length - 1, Math.floor(G.t / 5))]++;
     G.lastHit = G.t;
-    burst(tg.pos, tColor(), 22, 7);
+    burst(tg.pos, tg.hex || tColor(), 22, 7);
     pop((bull ? '★ ' : '') + '+' + fmt(pts), tg.pos, bull ? 'gold' : '');
     hitMarker(bull);
     Snd.hit(G.mult, bull);
@@ -852,6 +1017,26 @@
     const vel = new THREE.Vector3(Math.cos(a) * sp, Math.sin(a) * sp * 0.6, rnd(-0.4, 0.4) * sp);
     spawn(new THREE.Vector3(rnd(-8, 8), rnd(-2, 5), rnd(-16, -11)), 0.62 * G.dm.taille, { vel });
   }
+  // --- Mode 7 : Strafe ---
+  const STRAFE = { x: 9, y0: -1.5, y1: 4.5, z: -14 };
+  function strafeSpawn() {
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const tg = spawn(new THREE.Vector3(rnd(-6, 6), rnd(STRAFE.y0, STRAFE.y1), STRAFE.z), 0.6 * G.dm.taille, { vel: new THREE.Vector3(dir * 5.5 * G.dm.vit, 0, 0) });
+    if (tg) tg.flip = rnd(0.4, 1.0);
+  }
+  // --- Mode 8 : Rafale ---
+  const VOLLEY = 5;
+  function volleySpawn() {
+    const placed = [];
+    for (let i = 0; i < VOLLEY; i++) {
+      const p = new THREE.Vector3();
+      let g = 0;
+      do { p.set(rnd(-6.5, 6.5), rnd(-2, 4.5), -14); g++; } while (g < 30 && placed.some((q) => q.distanceTo(p) < 2.3));
+      placed.push(p.clone());
+      spawn(p, 0.55 * G.dm.taille);
+    }
+    G.ms.vt = G.t; G.ms.left = VOLLEY;
+  }
   // --- Mode 6 : Réflexes ---
   const ROUNDS = 10;
   function reflexNext() {
@@ -865,7 +1050,7 @@
     const m = G.ms;
     m.phase = 'result'; m.timer = 1.0; m.round++;
     m.pts.push(pts); m.times.push(ms);
-    G.score += pts;
+    G.score += pts; G.pace[m.round] = Math.round(G.score);
     setMsg(text, true);
     updateHud();
   }
@@ -960,7 +1145,7 @@
       desc: "Dix manches. À chaque fois, attends que la cible apparaisse puis touche-la le plus vite possible. On mesure ton temps de réaction.",
       regles: ['10 manches, pas de chronomètre : seul compte ton temps.', "Tirer avant l'apparition est un faux départ : la manche vaut 0.", 'Moins de 200 ms, c\'est un temps de champion. Environ 1 000 points pour une réponse instantanée.'],
       astuce: 'Ne tire pas avant que la cible apparaisse.', grades: [3500, 5500, 6800, 7800],
-      start() { G.ms = { round: 0, phase: 'wait', timer: rnd(1.1, 3.4), times: [], pts: [], falseStarts: 0, goT: 0, tg: null }; setMsg('Attends la cible…', true); },
+      start() { G.pace = [0]; G.ms = { round: 0, phase: 'wait', timer: rnd(1.1, 3.4), times: [], pts: [], falseStarts: 0, goT: 0, tg: null }; setMsg('Attends la cible…', true); },
       update(dt) {
         const m = G.ms;
         if (m.phase === 'wait') {
@@ -997,8 +1182,9 @@
           if (pk) {
             const ms = Math.max(1, Math.round(now - m.goT));
             const pts = Math.round(Math.max(0, (700 - ms) / 700) * 1000 * G.dm.mult);
+            G.kill.push(ms / 1000);
             G.hits++; G.streak++; G.best = Math.max(G.best, G.streak);
-            burst(pk.tg.pos, tColor(), 22, 7); hitMarker(pk.rho <= BULL); Snd.hit(1, pk.rho <= BULL);
+            burst(pk.tg.pos, pk.tg.hex || tColor(), 22, 7); hitMarker(pk.rho <= BULL); Snd.hit(1, pk.rho <= BULL);
             pop(ms + ' ms', pk.tg.pos, ms < 200 ? 'gold' : '');
             kill(pk.tg);
             if (ms < 200) unlock('doigts-eclair');
@@ -1009,6 +1195,43 @@
         }
         return true; // pendant l'écran de résultat : tir ignoré
       },
+    },
+    {
+      id: 'strafe', nom: 'Strafe', ic: '↔️', court: 'Une cible file de gauche à droite et change de sens sans prévenir.', duree: 45,
+      desc: 'Une seule cible court le long du mur, ralentit, repart, change de sens. Anticipe ses virages et tire au bon moment, comme face à un adversaire qui esquive.',
+      regles: ['Dure 45 secondes.', "La cible s'arrête parfois une fraction de seconde : c'est le moment de tirer.", 'Une nouvelle cible apparaît à chaque cible touchée.'],
+      astuce: 'Vise un peu en avant de la cible, pas dessus.', grades: [2000, 4200, 7000, 10000],
+      start() { G.ms = {}; strafeSpawn(); },
+      onHit() { strafeSpawn(); },
+      update(dt) {
+        const sp = 5.5 * G.dm.vit;
+        for (const t of pool) {
+          if (!t.alive || t.deco) continue;
+          t.pos.x += t.vel.x * dt;
+          if (t.pos.x > STRAFE.x) { t.pos.x = STRAFE.x; t.vel.x = -Math.abs(t.vel.x) || -sp; } else if (t.pos.x < -STRAFE.x) { t.pos.x = -STRAFE.x; t.vel.x = Math.abs(t.vel.x) || sp; }
+          t.flip -= dt;
+          if (t.flip <= 0) {
+            if (Math.random() < 0.22) { t.vel.x = 0; t.flip = rnd(0.25, 0.4); } else { t.vel.x = (Math.random() < 0.5 ? -1 : 1) * sp * rnd(0.55, 1.2); t.flip = rnd(0.35, 1.1); }
+          }
+        }
+      },
+    },
+    {
+      id: 'rafale', nom: 'Rafale', ic: '🎆', court: 'Cinq cibles d\'un coup : choisis ton ordre, vide la salve vite.', duree: 45,
+      desc: 'Cinq cibles apparaissent en même temps. Tu choisis dans quel ordre les toucher. Vider la salve rapidement rapporte un bonus, puis la suivante arrive.',
+      regles: ['Dure 45 secondes.', 'Salve vidée en moins de 4 secondes : bonus jusqu\'à 500 points (× la difficulté).', 'Enchaîne le plus court chemin entre les cibles.'],
+      astuce: 'Commence par la plus proche, puis enchaîne de voisine en voisine.', grades: [2800, 5500, 8500, 12000],
+      start() { G.ms = { vt: 0, wait: 0, left: 0, salves: 0 }; volleySpawn(); },
+      onHit(tg) {
+        const m = G.ms; m.left--;
+        if (m.left > 0) return;
+        const dt = G.t - m.vt, bonus = Math.round(clamp((4 - dt) / 4, 0, 1) * 500 * G.dm.mult);
+        m.salves++; m.wait = 0.35;
+        const pp = tg.pos.clone(); pp.y += 1;
+        if (bonus > 0) { G.score += bonus; pop('Salve en ' + dt.toFixed(1).replace('.', ',') + ' s · +' + bonus, pp, 'gold'); } else pop('Salve vidée', pp, '');
+        if (dt < 2) unlock('salve-eclair');
+      },
+      update(dt) { const m = G.ms; if (m.wait > 0) { m.wait -= dt; if (m.wait <= 0) volleySpawn(); } },
     },
   ];
   MODES.push(Object.assign({}, MODES[0], {
@@ -1024,15 +1247,27 @@
   /* =====================================================================
    * 8. HUD
    * ===================================================================== */
-  const hud = { root: $('#hud'), score: $('#h-score'), mult: $('#h-mult'), time: $('#h-time'), tlbl: $('#h-tlbl'), bar: $('#h-bar'), acc: $('#h-acc'), msg: $('#h-msg'), count: $('#count') };
+  const hud = { root: $('#hud'), score: $('#h-score'), mult: $('#h-mult'), time: $('#h-time'), tlbl: $('#h-tlbl'), bar: $('#h-bar'), acc: $('#h-acc'), msg: $('#h-msg'), count: $('#count'), ghost: $('#h-ghost') };
   function setText(el, key, v) { if (G.hudCache[key] !== v) { G.hudCache[key] = v; el.textContent = v; } }
   function setMsg(text, big) {
     if (!text) { hud.msg.hidden = true; return; }
     hud.msg.hidden = false; hud.msg.textContent = text; hud.msg.classList.toggle('big', !!big);
   }
+  // Fantôme : score de ta meilleure partie au même instant (échantillonné chaque seconde, ou chaque manche en Réflexes)
+  function ghostAt() {
+    const g = G.ghost;
+    if (G.mode.id === 'reflexes') return g[Math.min(G.ms.round, g.length - 1)];
+    const x = clamp(G.t, 0, g.length - 1), i = Math.floor(x);
+    return g[i] + (g[Math.min(i + 1, g.length - 1)] - g[i]) * (x - i);
+  }
   function updateHud() {
     const m = G.mode; if (!m) return;
     setText(hud.score, 's', fmt(G.score));
+    if (G.ghost) {
+      const d = Math.round(G.score - ghostAt());
+      setText(hud.ghost, 'g', '👻 ' + (d >= 0 ? '+' : '−') + fmt(Math.abs(d)));
+      hud.ghost.classList.toggle('ahead', d >= 0);
+    }
     if (m.id === 'reflexes') {
       hud.tlbl.textContent = 'Manche';
       setText(hud.time, 't', Math.min(ROUNDS, G.ms.round + (G.ms.phase === 'result' ? 0 : 1)) + '/' + ROUNDS);
@@ -1061,12 +1296,18 @@
       setText(hud.acc, 'a', G.shots ? G.hits + ' ✓ · ' + Math.round((G.hits / G.shots) * 100) + ' %' : '');
     }
   }
+  const musicSync = () => Snd.music(!document.hidden && (state === 'menu' || state === 'countdown' || state === 'play'));
+  document.addEventListener('pointerdown', () => { Snd.unlock(); musicSync(); }, true);
   function syncSoundButtons() {
     const mute = S.opt.mute;
     const b = $('#b-snd'); b.textContent = mute ? '🔇' : '🔊'; b.setAttribute('aria-pressed', String(mute)); b.setAttribute('aria-label', mute ? 'Remettre le son' : 'Couper le son');
+    const mm = !S.opt.mus, bm = $('#b-mus'); bm.textContent = mm ? '🔕' : '🎵'; bm.setAttribute('aria-pressed', String(mm)); bm.setAttribute('aria-label', mm ? 'Remettre la musique' : 'Couper la musique');
+    const tm = $('#t-mus'); tm.textContent = mm ? '🔕 Musique : coupée' : '🎵 Musique : activée'; tm.setAttribute('aria-pressed', String(mm));
+    $('#r-mus').value = Math.round(S.opt.musv * 100); $('#o-mus').textContent = Math.round(S.opt.musv * 100) + ' %';
     const t = $('#t-mute'); t.textContent = mute ? '🔇 Son coupé' : '🔊 Son activé'; t.setAttribute('aria-pressed', String(mute));
   }
-  function toggleMute() { S.opt.mute = !S.opt.mute; Snd.unlock(); Snd.refresh(); syncSoundButtons(); save(); }
+  function toggleMute() { S.opt.mute = !S.opt.mute; Snd.unlock(); Snd.refresh(); syncSoundButtons(); musicSync(); save(); }
+  function toggleMusic() { S.opt.mus = !S.opt.mus; Snd.unlock(); syncSoundButtons(); musicSync(); save(); }
 
   /* =====================================================================
    * 9. Flux de partie
@@ -1096,6 +1337,10 @@
     G.ps = mode.tailleReglable ? PSIZES[G.psIdx] : null;
     G.k = G.dm.mult * (G.ps ? G.ps.mult : 1);
     G.prevRecord = S.rec[recKey(mode.id, G.diff, G.psIdx)] || 0;
+    G.ghost = S.opt.gh && !mode.libre && G.prevRecord > 0 && S.gh[recKey(mode.id, G.diff, G.psIdx)] && S.gh[recKey(mode.id, G.diff, G.psIdx)].length > 2 ? S.gh[recKey(mode.id, G.diff, G.psIdx)] : null;
+    if (!opts.seance || mode.libre) seance = null;
+    G.seance = seance;
+    hud.ghost.hidden = !G.ghost;
     sessionCursor = false;
     view.yaw = 0; view.pitch = 0; applyView();
     state = 'countdown'; G.cd = 3;
@@ -1140,6 +1385,7 @@
     Snd.humSet(false, 0);
     if (document.pointerLockElement === canvas) { wasLocked = false; try { document.exitPointerLock(); } catch (e) { /* ignoré */ } }
     hud.count.hidden = true;
+    $('#p-recenter').hidden = !gyroActive();
     $('#pause-info').textContent = G.mode.nom + ' · ' + G.dm.nom + ' · score ' + fmt(G.score);
     showScreen('pause');
     updateCursorVisual();
@@ -1152,16 +1398,18 @@
     hud.count.hidden = false; hud.count.textContent = String(G.cd); tickCount();
     if (!effCursor()) requestLock('resume');
     updateCursorVisual();
+    musicSync();
     kick();
   }
   function restart() {
     if (!G.mode || (state !== 'play' && state !== 'countdown' && state !== 'pause')) return;
     startGame(G.mode.id, replayOpts());
   }
-  const replayOpts = () => ({ diff: G.diff, daily: G.daily, psz: G.psIdx });
+  const replayOpts = () => ({ diff: G.diff, daily: G.daily, psz: G.psIdx, seance: !!G.seance });
   function quitToMenu() {
     Snd.humStop();
     releaseLock();
+    seance = null;
     state = 'menu'; hud.root.hidden = true; setMsg(''); hud.count.hidden = true; arrowEl.hidden = true;
     clearTargets(); ambientInit();
     updateCursorVisual();
@@ -1172,6 +1420,14 @@
   function gradeOf(mode, score) {
     const raw = score / G.k, g = mode.grades;
     return raw >= g[3] ? 'S' : raw >= g[2] ? 'A' : raw >= g[1] ? 'B' : raw >= g[0] ? 'C' : 'D';
+  }
+  function checkCos() {
+    Object.keys(COS).forEach((k) => {
+      if (S.cu.indexOf(k) >= 0 || !COS[k][1]()) return;
+      S.cu.push(k);
+      const p = k.split(':');
+      toast('🎁 Débloqué : ' + cosName(p[0], p[1]) + ' (' + (p[0] === 'tc' ? 'couleur de cible' : p[0] === 'xs' ? 'viseur' : 'aspect de cible') + ') — dans les réglages', 'info');
+    });
   }
   function finish() {
     if (G.over) return;
@@ -1207,6 +1463,35 @@
       else { j.serie = j.d === yesterdayKey() ? j.serie + 1 : 1; j.d = today; j.s = score; }
     }
 
+    // Fantôme : comparaison avec le record, puis mémorisation si record battu
+    if (m.duree) while (G.pace.length <= m.duree) G.pace.push(score);
+    if (G.ghost) {
+      const g = G.ghost, n = Math.min(g.length, G.pace.length);
+      let ahead = 0;
+      for (let i = 1; i < n; i++) if (G.pace[i] >= g[i]) ahead++;
+      const mid = Math.floor(n / 2);
+      G.ghostRes = { ahead, total: Math.max(1, n - 1), unit: m.duree ? 's' : 'manches', midBehind: G.pace[mid] < g[mid] };
+      if (isRecord && G.ghostRes.midBehind) unlock('remontada');
+    }
+    if (isRecord && !m.libre) S.gh[key] = G.pace.slice(0, 130);
+    // Statistiques avancées (temps par cible, régularité, ratés cumulés)
+    if (!m.libre) {
+      const A = S.adv[m.id] || (S.adv[m.id] = { n: 0, k: 0, t: 0, q: 0, h: new Array(81).fill(0) });
+      A.n++;
+      G.kill.forEach((v) => { A.k++; A.t += v; A.q += v * v; });
+      G.shotLog.forEach((p) => {
+        if (p[2]) return;
+        const ix = Math.floor(p[0] + 4.5), iy = Math.floor(4.5 - p[1]);
+        if (ix >= 0 && ix < 9 && iy >= 0 && iy < 9) A.h[iy * 9 + ix]++;
+      });
+    }
+    // Séance guidée
+    if (G.seance) {
+      G.seance.res.push({ m, score, grade }); G.seance.total += score; G.seance.i++;
+      if (G.seance.i >= G.seance.plan.length) { tot.seances++; unlock('seance-complete'); }
+    }
+    if (G.dailyOk) tot.dmax = Math.max(tot.dmax, S.jour.serie);
+
     // Détails + graphique
     const rows = [], sr = { vals: [], cap: '', unit: '' };
     if (hitMode) {
@@ -1226,6 +1511,7 @@
         ['Plus lent', ok.length ? Math.max.apply(null, ok) + ' ms' : '—'], ['Manches réussies', ok.length + '/' + ROUNDS], ['Faux départs', G.ms.falseStarts]);
       sr.vals = G.ms.times.slice(); sr.cap = 'Temps de réaction de chaque manche, en ms (une barre basse, c\'est rapide ; aucune barre : manche ratée).'; sr.unit = 'ms';
     }
+    checkCos();
     save(true);
     renderEnd(m, score, grade, isRecord, prev, rows, sr);
     showScreen('end');
@@ -1266,7 +1552,7 @@
     if (wantLoop()) { lastTs = performance.now(); raf = requestAnimationFrame(loop); } else renderOnce();
   }
   function renderOnce() { applyView(); renderer.render(scene, camera); }
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (state === 'play' || state === 'countdown') pause(); } else kick(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (state === 'play' || state === 'countdown') pause(); } else kick(); musicSync(); });
 
   function loop(ts) {
     raf = 0;
@@ -1285,6 +1571,7 @@
       else if (cur !== prev) { hud.count.textContent = String(cur); tickCount(); Snd.beep(440); }
     } else if (state === 'play') {
       G.t += dt;
+      if (G.mode.duree) { const s = Math.floor(G.t); while (G.pace.length <= s) G.pace.push(Math.round(G.score)); }
       if (G.mode.update) G.mode.update(dt);
       if (G.hudCache.hint !== undefined && G.t > G.hudCache.hint && G.mode.id !== 'reflexes') { setMsg(''); G.hudCache.hint = undefined; }
       updateTargets(dt, nowS);
@@ -1309,9 +1596,10 @@
   function ambientInit() {
     clearTargets();
     ambientT = 0;
-    const c = tColor();
+    const c = tBase();
     for (let i = 0; i < 6; i++) {
       const tg = pool[i];
+      tg.u.uCB.value = 0; tg.u.uSkin.value = skinIdx();
       tg.alive = true; tg.deco = true; tg.r = 0.7; tg.mesh.visible = true; tg.u.uColor.value.set(c); tg.glow.material.color.set(c);
       tg.u.uHot.value = 0; tg.u.uFlash.value = 0; tg.u.uWarn.value = 0; tg.mesh.scale.setScalar(0.7); tg.ph = (i / 6) * Math.PI * 2;
     }
@@ -1386,7 +1674,7 @@
     if (document.pointerLockElement !== canvas || (state !== 'play' && state !== 'countdown')) return;
     const mx = e.movementX || 0, my = e.movementY || 0;
     if (Math.abs(mx) > 400 || Math.abs(my) > 400) return; // saut parasite à la capture
-    const k = 0.0012 * S.opt.sens * (camera.fov / 75);
+    const k = radPerCount();
     view.yaw -= mx * k; view.pitch -= my * k * (S.opt.inv ? -1 : 1);
     view.yaw = wrapAngle(view.yaw);
     applyView();
@@ -1458,6 +1746,7 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'm') { toggleMute(); return; }
+    if (k === 'n') { toggleMusic(); return; }
     if (state === 'play' || state === 'countdown') {
       if (k === 'p' || k === 'Escape') { e.preventDefault(); pause(); }
       else if (k === 'r') { e.preventDefault(); restart(); }
@@ -1475,6 +1764,7 @@
   let backTo = 'menu';
   function showScreen(name) {
     screen = name;
+    setTimeout(musicSync, 0);
     $('#ui').hidden = !name;
     Object.keys(screens).forEach((k) => { screens[k].hidden = k !== name; });
     if (name) {
@@ -1507,6 +1797,38 @@
   function dailySerie() { const j = S.jour; return j.d === dayKey() || j.d === yesterdayKey() ? j.serie : 0; }
   let briefDaily = false;
 
+  // --- Séance guidée : 3 modes choisis d'après tes dernières parties ---
+  let seance = null;
+  const LETTERS = ['D', 'C', 'B', 'A', 'S'];
+  function modeLevel(m) { // 0 = débutant … 4 = note S ; -1 = jamais joué
+    const a = S.ev[m.id];
+    if (!a || !a.length) return -1;
+    const rec = a.slice(-3), v = rec.reduce((x, y) => x + y, 0) / rec.length / 1.5, g = m.grades, T = [0].concat(g);
+    let i = 0;
+    while (i < 4 && v >= T[i + 1]) i++;
+    return i >= 4 ? 4 : i + (v - T[i]) / (T[i + 1] - T[i]);
+  }
+  const letterOf = (lv) => LETTERS[Math.min(4, Math.floor(lv))];
+  function seancePlan() {
+    const rated = SCORED.map((m) => ({ m, lv: modeLevel(m) }));
+    const played = rated.filter((x) => x.lv >= 0).sort((a, b) => b.lv - a.lv);
+    const unplayed = rated.filter((x) => x.lv < 0);
+    const steps = [];
+    const first = played[0] || { m: modeById('grille'), lv: -1 };
+    steps.push({ m: first.m, why: first.lv >= 0 ? "pour t'échauffer sur ta spécialité (note " + letterOf(first.lv) + ')' : 'pour commencer en douceur' });
+    const rest = played.slice(1).sort((a, b) => a.lv - b.lv);
+    const cand = unplayed.filter((x) => x.m !== first.m).concat(rest);
+    cand.slice(0, 2).forEach((x) => steps.push({ m: x.m, why: x.lv < 0 ? "à découvrir : tu ne l'as pas encore joué" : 'ton point à travailler (note ' + letterOf(x.lv) + ')' }));
+    for (const x of rated) { if (steps.length >= 3) break; if (!steps.some((s) => s.m === x.m)) steps.push({ m: x.m, why: 'pour varier les plaisirs' }); }
+    return steps;
+  }
+  function openSeance() {
+    const plan = seancePlan(), sec = plan.reduce((a, s) => a + (s.m.duree || 40) + 10, 0);
+    $('#se-steps').innerHTML = plan.map((s) => '<li><b>' + s.m.ic + ' ' + escHtml(s.m.nom) + '</b> — ' + escHtml(s.why) + ' <span class="dim">(' + (s.m.duree ? s.m.duree + ' s' : '10 manches') + ')</span></li>').join('');
+    $('#se-dur').textContent = 'Durée totale : environ ' + Math.round(sec / 60) + ' minutes. Difficulté : ' + DIFFS[S.opt.diff].nom + ' (réglable dans le menu). Tes scores comptent pour tes records.';
+    open('seance', 'menu');
+  }
+
   // --- Menu ---
   function bestOf(modeId, diff) { return S.rec[modeId + ':' + diff] || 0; }
   function buildMenu() {
@@ -1530,6 +1852,7 @@
     // Sélecteurs de réglages
     $('#g-xs').innerHTML = XSTYLES.map((x) => '<button type="button" role="radio" data-v="' + x.id + '" aria-label="' + escHtml(x.nom) + '">' + xhSVG(x.id, '#2de2e6', 36) + '</button>').join('');
     $('#g-xc').innerHTML = XCOLORS.map((c) => '<button type="button" class="swatch" role="radio" data-v="' + c.id + '" aria-label="' + c.nom + '" style="background:' + c.id + ';color:' + c.id + '"></button>').join('');
+    $('#g-sk').innerHTML = SKINS.map((x) => '<button type="button" role="radio" data-v="' + x.id + '">' + x.nom + '<small>' + x.info + '</small></button>').join('');
     $('#g-tc').innerHTML = TCOLORS.map((c) => '<button type="button" class="swatch" role="radio" data-v="' + c.id + '" aria-label="' + c.nom + '" style="background:' + c.hex + ';color:' + c.hex + '"></button>').join('');
   }
   function refreshMenu() {
@@ -1544,6 +1867,7 @@
     $('#dy-title').textContent = plan.mode.ic + ' ' + plan.mode.nom + ' · ' + DIFFS[plan.diff].nom;
     $('#dy-info').textContent = (done ? '✓ Relevé aujourd\'hui, meilleur : ' + fmt(j.s) + ' pts' : 'Pas encore relevé aujourd\'hui') + ' · Série : ' + serie + ' jour' + (serie > 1 ? 's' : '');
     $('#dy-go').textContent = done ? 'Rejouer le défi' : 'Relever le défi';
+    $('#se-info').textContent = S.tot.seances ? 'Séances terminées : ' + S.tot.seances + ' · adaptée à tes statistiques' : 'Trois modes choisis selon tes statistiques, environ 3 minutes';
   }
   function briefBest() {
     const m = selMode, diff = briefDaily ? dailyPlan().diff : S.opt.diff, idx = m.tailleReglable && !briefDaily ? S.opt.psz : 1;
@@ -1599,10 +1923,27 @@
     const has = G.shotLog.length >= 3;
     $('#e-mapbox').hidden = !has;
     if (has) { $('#e-map').innerHTML = mapHTML(G.shotLog); $('#e-bias').textContent = biasText(G.shotLog); }
+    // Fantôme
+    const gh = $('#e-ghost'), r = G.ghostRes;
+    gh.hidden = !r;
+    if (r) gh.textContent = '👻 Face à ton fantôme (ton record) : tu as été devant pendant ' + r.ahead + ' ' + (r.unit === 's' ? 'seconde' + (r.ahead > 1 ? 's' : '') : 'manche' + (r.ahead > 1 ? 's' : '')) + ' sur ' + r.total + '.';
+    // Séance guidée
+    const sb = $('#e-seance'), sn = $('#e-nextstep'), se = G.seance;
+    sb.hidden = !se; sn.hidden = true;
+    if (se) {
+      const done = se.i >= se.plan.length;
+      if (!done) {
+        const nx = se.plan[se.i];
+        sb.innerHTML = '<b>🏋️ Séance guidée : étape ' + se.i + '/' + se.plan.length + ' terminée.</b> Prochaine étape : ' + nx.m.ic + ' ' + escHtml(nx.m.nom) + ' — ' + escHtml(nx.why);
+        sn.hidden = false; sn.textContent = 'Étape suivante : ' + nx.m.ic + ' ' + nx.m.nom + ' →';
+      } else {
+        sb.innerHTML = '<b>🏋️ Séance terminée, bravo !</b> Total : ' + fmt(se.total) + ' points.<br>' + se.res.map((x) => x.m.ic + ' ' + escHtml(x.m.nom) + ' : ' + fmt(x.score) + ' (note ' + x.grade + ')').join(' · ');
+      }
+    }
   }
   let lastResult = null;
   function mapHTML(log) {
-    const c = tColor();
+    const c = tBase();
     let h = '<circle r="1" fill="' + c + '" fill-opacity=".28" stroke="' + c + '" stroke-width=".05"/><circle r=".35" fill="#ffe9a6" fill-opacity=".6"/>' +
       '<path d="M-4.4 0H4.4M0 -4.4V4.4" stroke="#fff" stroke-opacity=".12" stroke-width=".04"/>';
     log.forEach((p) => {
@@ -1674,7 +2015,31 @@
 
   // --- Statistiques ---
   let evMode = 'grille';
+  function heatBias(h) {
+    let tot = 0, sx = 0, sy = 0;
+    h.forEach((c, i) => { tot += c; sx += c * ((i % 9) - 4); sy += c * (4 - Math.floor(i / 9)); });
+    if (tot < 8) return tot ? 'Pas encore assez de ratés (' + tot + ') pour dégager une tendance.' : 'Aucun raté enregistré près des cibles : continue comme ça !';
+    const mx = sx / tot, my = sy / tot, parts = [];
+    if (Math.abs(mx) > 0.6) parts.push(mx < 0 ? 'à gauche' : 'à droite');
+    if (Math.abs(my) > 0.6) parts.push(my > 0 ? 'en haut' : 'en bas');
+    return tot + ' ratés cumulés. ' + (parts.length ? 'Ils partent plutôt ' + parts.join(' et ') + ' de la cible.' : 'Ils sont bien répartis autour de la cible : pas de biais marqué.');
+  }
+  function drawAdv() {
+    const A = S.adv[evMode], box = $('#sx-adv'), heat = $('#sx-heat'), cap = $('#sx-heatcap');
+    const ring = '<circle r="1" fill="none" stroke="#2de2e6" stroke-width=".06" stroke-opacity=".7"/><circle r=".35" fill="none" stroke="#ffe9a6" stroke-width=".05" stroke-opacity=".7"/>';
+    if (!A || !A.n) { box.innerHTML = '<div class="stat"><div class="k">Analyse</div><div class="v" style="font-size:.95rem">Joue ce mode pour la voir</div></div>'; heat.innerHTML = ring; cap.textContent = 'Ici s\'accumulent les ratés de toutes tes parties, autour de la cible (le cercle).'; return; }
+    const mean = A.k ? A.t / A.k : 0, sd = A.k ? Math.sqrt(Math.max(0, A.q / A.k - mean * mean)) : 0, cv = mean ? sd / mean : 0;
+    const reg = !A.k ? '—' : cv < 0.45 ? 'Très régulier' : cv < 0.75 ? 'Régulier' : 'Variable';
+    const cells = [['Parties analysées', fmt(A.n)], [evMode === 'reflexes' ? 'Réaction moyenne' : 'Temps moyen par cible', A.k ? Math.round(mean * 1000) + ' ms' : '—'], ['Écart typique', A.k ? '± ' + Math.round(sd * 1000) + ' ms' : '—'], ['Régularité', reg]];
+    box.innerHTML = cells.map((r) => '<div class="stat"><div class="k">' + r[0] + '</div><div class="v">' + r[1] + '</div></div>').join('');
+    const max = Math.max.apply(null, A.h.concat([1]));
+    let h = '';
+    A.h.forEach((c, i) => { if (c) h += '<rect x="' + ((i % 9) - 4.5) + '" y="' + (Math.floor(i / 9) - 4.5) + '" width="1" height="1" fill="#ff3d7f" fill-opacity="' + (0.15 + 0.85 * c / max).toFixed(2) + '"/>'; });
+    heat.innerHTML = h + ring;
+    cap.textContent = heatBias(A.h);
+  }
   function drawEv() {
+    drawAdv();
     const svg = $('#sx-ev'), vals = S.ev[evMode] || [], cap = $('#sx-evcap'), n = vals.length;
     $$('#sx-evm [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === evMode)));
     const W = Math.max(220, svg.clientWidth || 300), H = 120;
@@ -1706,7 +2071,7 @@
     const pct = t.tirs ? Math.round((t.touches / t.tirs) * 100) + ' %' : '—';
     const h = Math.floor(t.sec / 3600), mi = Math.floor((t.sec % 3600) / 60), s = t.sec % 60;
     const time = h ? h + ' h ' + mi + ' min' : mi + ' min ' + s + ' s';
-    const cells = [['Parties jouées', fmt(t.parties)], ['Cibles touchées', fmt(t.touches)], ['Précision globale', pct], ['Temps de jeu', time], ['Meilleure série', fmt(t.serie)], ['Défi du jour : série', dailySerie() + ' j']];
+    const cells = [['Parties jouées', fmt(t.parties)], ['Cibles touchées', fmt(t.touches)], ['Précision globale', pct], ['Temps de jeu', time], ['Meilleure série', fmt(t.serie)], ['Défi du jour : série', dailySerie() + ' j'], ['Séances guidées', fmt(t.seances)]];
     $('#sx-tot').innerHTML = cells.map((r) => '<div class="stat"><div class="k">' + r[0] + '</div><div class="v">' + r[1] + '</div></div>').join('');
     $('#sx-rec').innerHTML = '<tr><th>Mode</th>' + DIFFS.map((d) => '<th class="r">' + d.nom + '</th>').join('') + '</tr>' +
       SCORED.map((m) => '<tr><td>' + m.ic + ' ' + escHtml(m.nom) + '</td>' + DIFFS.map((d) => '<td class="r">' + (bestOf(m.id, d.id) ? fmt(bestOf(m.id, d.id)) : '—') + '</td>').join('') + '</tr>').join('') +
@@ -1727,18 +2092,60 @@
     const c = $('#sx-clear'); c.classList.remove('armed'); c.textContent = 'Effacer mes stats';
   }
 
+  // --- Sauvegarde : code à copier / coller (aucun fichier, aucun réseau) ---
+  const B64 = { enc: (s) => btoa(unescape(encodeURIComponent(s))), dec: (s) => decodeURIComponent(escape(atob(s))) };
+  function exportCode() { save(true); return 'AIM1.' + B64.enc(JSON.stringify(S)); }
+  function importCode(txt) {
+    const t = String(txt || '').replace(/\s+/g, '');
+    if (t.slice(0, 5) !== 'AIM1.' || t.length > 600000) throw new Error('format');
+    const raw = JSON.parse(B64.dec(t.slice(5)));
+    if (!raw || typeof raw !== 'object' || !(raw.opt || raw.tot || raw.rec)) throw new Error('contenu');
+    return normalize(raw);
+  }
+  function svStatus(msg, cls) { const s = $('#sv-status'); s.className = 'status ' + (cls || ''); s.textContent = msg; }
+  function bindSave() {
+    $('#sv-export').addEventListener('click', () => { $('#sv-text').value = exportCode(); svStatus('Code généré. Copie-le (bouton ci-dessous) et garde-le précieusement.', 'ok'); });
+    $('#sv-copy').addEventListener('click', async () => {
+      const ta = $('#sv-text');
+      if (!ta.value) ta.value = exportCode();
+      try { await navigator.clipboard.writeText(ta.value); svStatus('Code copié dans le presse-papiers ✓', 'ok'); }
+      catch (e) { ta.focus(); ta.select(); try { document.execCommand('copy'); svStatus('Code copié ✓', 'ok'); } catch (e2) { svStatus('Copie impossible ici : sélectionne le texte et copie-le à la main (Ctrl+C).', 'ko'); } }
+    });
+    const imp = $('#sv-import');
+    imp.addEventListener('click', () => {
+      let n;
+      try { n = importCode($('#sv-text').value); } catch (e) { imp.classList.remove('armed'); imp.textContent = 'Importer ce code'; svStatus("Ce code n'est pas valide. Colle un code complet commençant par AIM1.", 'ko'); return; }
+      if (!imp.classList.contains('armed')) { imp.classList.add('armed'); imp.textContent = 'Confirmer : remplacer ma progression ?'; svStatus('Ta progression actuelle sera remplacée par celle du code.', ''); return; }
+      imp.classList.remove('armed'); imp.textContent = 'Importer ce code';
+      S = n; save(true); applyAllSettings(); buildStats(); drawEv();
+      svStatus('Progression importée ✓ (' + fmt(S.tot.parties) + ' parties, ' + Object.keys(S.rec).length + ' records).', 'ok');
+    });
+    $('#sv-text').addEventListener('input', () => { imp.classList.remove('armed'); imp.textContent = 'Importer ce code'; });
+  }
+
   // --- Réglages ---
   function syncSettings() {
     const o = S.opt;
     $('#r-sens').value = o.sens; $('#o-sens').textContent = o.sens.toFixed(2).replace('.', ',');
+    $('#o-cm').textContent = '≈ ' + Math.round(cm360()) + ' cm pour 360° à ' + o.dpi + ' DPI';
+    if (document.activeElement !== $('#r-dpi')) $('#r-dpi').value = o.dpi;
     $('#r-fov').value = o.fov; $('#o-fov').textContent = o.fov + '°';
     $('#r-vol').value = Math.round(o.vol * 100); $('#o-vol').textContent = Math.round(o.vol * 100) + ' %';
     $('#r-xz').value = o.xz; $('#o-xz').textContent = '×' + o.xz.toFixed(1).replace('.', ',');
     const radio = (sel, v) => $$(sel + ' [role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === String(v))));
+    const lockAll = (sel, kind) => $$(sel + ' [role=radio]').forEach((b) => {
+      const lk = !cosOk(kind, b.dataset.v); b.classList.toggle('locked', lk);
+      b.title = lk ? 'Verrouillé : ' + COS[kind + ':' + b.dataset.v][0] : '';
+      const base = b.dataset.lbl || (b.dataset.lbl = b.getAttribute('aria-label') || ''); if (base) b.setAttribute('aria-label', base + (lk ? ' (verrouillé)' : ''));
+    });
+    lockAll('#g-tc', 'tc'); lockAll('#g-xs', 'xs'); lockAll('#g-sk', 'tskin');
+    const cb = $('#t-cb'); cb.textContent = o.cb ? '👁️ Aide daltonisme : activée' : '👁️ Aide daltonisme : désactivée'; cb.setAttribute('aria-pressed', String(o.cb));
+    radio('#g-sk', o.tskin);
     radio('#g-ctl', o.ctl); radio('#g-deco', o.deco); radio('#g-qual', o.qual); radio('#g-xs', o.xs); radio('#g-xc', o.xc); radio('#g-tc', o.tc);
     const fx = $('#t-fx'); fx.textContent = o.fx ? '✨ Effets : activés' : '✨ Effets : réduits'; fx.setAttribute('aria-pressed', String(o.fx));
     $('#f-gyro').hidden = !COARSE;
     const gy = $('#t-gyro'); gy.textContent = o.gyro ? '📱 Visée au gyroscope : activée' : '📱 Visée au gyroscope : désactivée'; gy.setAttribute('aria-pressed', String(o.gyro));
+    const gh = $('#t-gh'); gh.textContent = o.gh ? '👻 Fantôme du record : affiché' : '👻 Fantôme du record : masqué'; gh.setAttribute('aria-pressed', String(o.gh));
     const iv = $('#t-inv'); iv.textContent = o.inv ? '↕️ Axe vertical : inversé' : '↕️ Axe vertical : normal'; iv.setAttribute('aria-pressed', String(o.inv));
     syncSoundButtons();
     drawCross();
@@ -1750,18 +2157,35 @@
     num('#r-vol', 'vol', (v) => v / 100, () => { Snd.unlock(); Snd.refresh(); });
     num('#r-xz', 'xz', (v) => v);
     $('#r-vol').addEventListener('change', () => { Snd.unlock(); Snd.hit(2, false); });
-    const grp = (id, key, after) => $(id).addEventListener('click', (e) => {
+    const grp = (id, key, after, kind) => $(id).addEventListener('click', (e) => {
       const b = e.target.closest('[role=radio]'); if (!b) return;
+      if (kind && !cosOk(kind, b.dataset.v)) { toast('🔒 ' + cosName(kind, b.dataset.v) + ' : ' + COS[kind + ':' + b.dataset.v][0], 'info'); return; }
       S.opt[key] = b.dataset.v; syncSettings(); if (after) after(); save();
     });
     grp('#g-ctl', 'ctl', () => { sessionCursor = false; updateCursorVisual(); });
     grp('#g-deco', 'deco', () => { applyTheme(); renderOnce(); });
     grp('#g-qual', 'qual', () => { autoScale = 1; qAcc = 0; qN = 0; resize(); });
     $('#t-gyro').addEventListener('click', () => setGyro(!S.opt.gyro));
+    $('#r-dpi').addEventListener('input', (e) => { const v = Math.round(+e.target.value); if (v >= 100 && v <= 32000) { S.opt.dpi = v; $('#o-cm').textContent = '≈ ' + Math.round(cm360()) + ' cm pour 360° à ' + v + ' DPI'; save(); } });
+    $('#r-dpi').addEventListener('change', syncSettings);
+    $('#cv-game').innerHTML = GAMES.map((g) => '<option value="' + g.id + '">' + escHtml(g.nom) + '</option>').join('');
+    $('#cv-game').addEventListener('change', () => { $('#cv-lbl-t').textContent = $('#cv-game').value === 'cm' ? 'Valeur en cm/360°' : 'Sensibilité dans ce jeu'; });
+    $('#cv-go').addEventListener('click', convertSens);
+    $('#t-gh').addEventListener('click', () => { S.opt.gh = !S.opt.gh; syncSettings(); save(); });
+    $('#t-gcal').addEventListener('click', openCalib);
+    $('#t-gcal-reset').addEventListener('click', () => { S.opt.gcal = ''; save(); toast('Calibrage effacé : réglage par défaut rétabli.', 'info'); });
+    $('#cb-go').addEventListener('click', calGo);
+    $('#cb-back').addEventListener('click', () => { cal.busy = false; clearTimeout(cal.timer); removeEventListener('devicemotion', calEvent); backTo = calBack; showScreen('settings'); });
+    $('#p-recenter').addEventListener('click', () => { view.yaw = 0; view.pitch = 0; applyView(); toast('Vue recentrée.', 'info'); });
+    $('#t-cb').addEventListener('click', () => { S.opt.cb = !S.opt.cb; syncSettings(); save(); });
     $('#t-inv').addEventListener('click', () => { S.opt.inv = !S.opt.inv; syncSettings(); save(); });
-    grp('#g-xs', 'xs'); grp('#g-xc', 'xc');
-    grp('#g-tc', 'tc', () => { pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } }); renderOnce(); });
+    grp('#g-xs', 'xs', null, 'xs'); grp('#g-xc', 'xc');
+    grp('#g-tc', 'tc', () => { pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tBase()); t.glow.material.color.set(tBase()); } }); renderOnce(); }, 'tc');
+    grp('#g-sk', 'tskin', () => { pool.forEach((t) => { if (t.deco) t.u.uSkin.value = skinIdx(); }); renderOnce(); }, 'tskin');
     $('#t-mute').addEventListener('click', toggleMute);
+    $('#t-mus').addEventListener('click', toggleMusic);
+    $('#b-mus').addEventListener('click', toggleMusic);
+    $('#r-mus').addEventListener('input', (e) => { S.opt.musv = +e.target.value / 100; Snd.unlock(); syncSoundButtons(); musicSync(); save(); });
     $('#b-snd').addEventListener('click', toggleMute);
     $('#t-fx').addEventListener('click', () => { S.opt.fx = !S.opt.fx; syncSettings(); save(); });
     $('#st-back').addEventListener('click', () => { showScreen(backTo); if (backTo === 'menu') refreshMenu(); });
@@ -1791,7 +2215,7 @@
     $('#sx-clear').addEventListener('click', (e) => {
       const b = e.currentTarget;
       if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Confirmer : tout effacer ?'; return; }
-      S.rec = {}; S.tot = defaults().tot; S.hist = []; S.modes = []; S.ev = {};
+      S.rec = {}; S.tot = defaults().tot; S.hist = []; S.modes = []; S.ev = {}; S.gh = {}; S.adv = {};
       save(true); buildStats(); drawEv(); toast('Statistiques effacées (réglages et succès conservés).', 'info');
     });
     $('#p-resume').addEventListener('click', resume);
@@ -1799,7 +2223,11 @@
     $('#p-settings').addEventListener('click', () => { syncSettings(); open('settings', 'pause'); });
     $('#p-quit').addEventListener('click', quitToMenu);
     $('#b-pause').addEventListener('click', pause);
-    $('#e-again').addEventListener('click', () => startGame(G.mode.id, replayOpts()));
+    $('#e-again').addEventListener('click', () => startGame(G.mode.id, Object.assign(replayOpts(), { seance: false })));
+    $('#e-nextstep').addEventListener('click', () => { if (seance && seance.i < seance.plan.length) startGame(seance.plan[seance.i].m.id, { seance: true }); });
+    $('#se-go').addEventListener('click', openSeance);
+    $('#se-back').addEventListener('click', () => showScreen('menu'));
+    $('#se-start').addEventListener('click', () => { seance = { plan: seancePlan(), i: 0, res: [], total: 0 }; startGame(seance.plan[0].m.id, { seance: true }); });
     $('#e-menu').addEventListener('click', quitToMenu);
     $('#e-board').addEventListener('click', () => openBoard('end'));
   }
@@ -1902,12 +2330,13 @@
    * ===================================================================== */
   function applyAllSettings() {
     gyroSync(); applyTheme(); applyFov(); syncSettings(); Snd.refresh(); refreshMenu();
-    pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tColor()); t.glow.material.color.set(tColor()); } });
+    pool.forEach((t) => { if (t.deco) { t.u.uColor.value.set(tBase()); t.glow.material.color.set(tBase()); t.u.uSkin.value = skinIdx(); } });
     renderOnce();
   }
   buildMenu();
   bindSettings();
   bindUi();
+  bindSave();
   gyroSync();
   drawCross();
   syncSettings();
@@ -1921,6 +2350,6 @@
   initSdk();
 
   if (/[?&]debug\b/.test(location.search)) {
-    window.__aim = { get G() { return G; }, get state() { return state; }, pool, view, camera, S, MODES, shoot, startGame, finish, pause, resume, unlock };
+    window.__aim = { get G() { return G; }, get state() { return state; }, get S() { return S; }, Snd, pool, view, camera, MODES, shoot, startGame, finish, pause, resume, unlock };
   }
 })();

@@ -1,6 +1,6 @@
 {
   "titre": "Aim Trainer 3D",
-  "description": "Entraîne ta visée dans un dojo néon en 3D : six modes, défi du jour, carte de tes tirs, évolution de tes scores, records et statistiques.",
+  "description": "Entraîne ta visée dans un dojo néon en 3D : huit modes, défi du jour, séances guidées, fantôme de ton record, courbe de progression, carte des tirs et gyroscope sur mobile.",
   "emoji": "🎯",
   "couleur": "#101437",
   "tags": [
@@ -66,7 +66,7 @@
       {
         "id": "touche-a-tout",
         "titre": "Touche-à-tout",
-        "texte": "Jouer une partie dans chacun des six modes."
+        "texte": "Jouer une partie dans chacun des huit modes."
       },
       {
         "id": "sans-filet",
@@ -97,6 +97,21 @@
         "id": "microscope",
         "titre": "Microscope",
         "texte": "Marquer 3 000 points en Précision avec des cibles minuscules."
+      },
+      {
+        "id": "seance-complete",
+        "titre": "Séance complète",
+        "texte": "Terminer une séance guidée de trois modes."
+      },
+      {
+        "id": "remontada",
+        "titre": "Remontada",
+        "texte": "Battre ton record après avoir été derrière ton fantôme à mi-parcours."
+      },
+      {
+        "id": "salve-eclair",
+        "titre": "Salve éclair",
+        "texte": "Vider une salve de 5 cibles en moins de 2 secondes en mode Rafale."
       },
       {
         "id": "note-s",
